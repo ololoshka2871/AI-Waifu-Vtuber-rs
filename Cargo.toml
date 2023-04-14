@@ -30,3 +30,6 @@ name = "ai_waifu"
 
 [[bin]]
 name = "ai-waifu-discord-bot"
+
+[[bin]]
+name = "ai-waifu-interactive"
