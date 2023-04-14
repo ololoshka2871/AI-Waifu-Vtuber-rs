@@ -1,30 +1,38 @@
+use std::sync::Arc;
+
 use regex::Regex;
 use serenity::{
     async_trait,
     model::{
         channel::Message,
-        id::ChannelId,
-        prelude::{Ready, UserId},
+        id::{ChannelId, GuildId},
+        prelude::{MessageReference, Ready, UserId},
         user::User,
         voice::VoiceState,
     },
-    prelude::{Context, EventHandler},
+    prelude::{Context, EventHandler, Mutex},
 };
 
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info};
 
-use crate::request::Request as Req;
+use crate::discord_text_control::{TextRequest as Req, TextResponse as Resp};
 
 pub struct Handler {
     request_sender: Sender<Req>,
+    response_receiver: Arc<Mutex<Receiver<Resp>>>,
     channel_whitelist: Vec<Regex>,
 }
 
 impl Handler {
-    pub fn new(request_sender: Sender<Req>, channel_whitelist: Vec<String>) -> Self {
+    pub fn new(
+        request_sender: Sender<Req>,
+        response_receiver: Receiver<Resp>,
+        channel_whitelist: Vec<String>,
+    ) -> Self {
         Self {
             request_sender,
+            response_receiver: Arc::new(Mutex::new(response_receiver)),
             channel_whitelist: channel_whitelist
                 .iter()
                 .map(|s| Regex::new(&s).unwrap())
@@ -98,6 +106,31 @@ impl EventHandler for Handler {
         info!("{} is connected!", ready.user.name);
     }
 
+    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
+        info!("Cache ready");
+
+        let ctx_clone = ctx.clone();
+        let response_receiver = self.response_receiver.clone();
+
+        tokio::spawn(async move {
+            while let Some(resp) = response_receiver.lock().await.recv().await {
+                if let Err(e) = resp.channel_id.send_message(&ctx_clone.http, |m| {
+                    m.content(resp.text);
+                    if let Some(msg_id) = resp.req_msg_id {
+                        m.reference_message(MessageReference::from((resp.channel_id, msg_id)));
+                    }
+                    m.allowed_mentions(|am| {
+                        am.replied_user(false);
+                        am
+                    });
+                    m
+                }).await {
+                    error!("Failed to send message: {:?}", e);
+                }
+            }
+        });
+    }
+
     async fn message(&self, ctx: Context, message: Message) {
         // check if message is from a bot
         if message.author.bot {
@@ -117,8 +150,13 @@ impl EventHandler for Handler {
 
         debug!("{}: {}", message.author.name, message.content);
 
-        self.send_req(Req::TextRequest(message.author, message.content))
-            .await;
+        self.send_req(Req::TextRequest(
+            message.id,
+            message.channel_id,
+            message.author,
+            message.content,
+        ))
+        .await;
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {

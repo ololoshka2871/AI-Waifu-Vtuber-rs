@@ -4,11 +4,15 @@ use serenity::{client::Client, framework::StandardFramework, prelude::GatewayInt
 
 use songbird::{driver::DecodeMode, Config, SerenityInit};
 
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, debug};
 
 use ai_waifu::{
-    chatgpt::ChatGPT, config::Config as BotConfig, dispatcher::Dispatcher,
-    google_translator::GoogleTranslator, handler::Handler, request::Request,
+    chatgpt::ChatGPT,
+    config::Config as BotConfig,
+    discord_text_control::{TextRequest, TextResponse},
+    dispatcher::Dispatcher,
+    google_translator::GoogleTranslator,
+    handler::Handler,
 };
 
 #[tokio::main]
@@ -22,7 +26,10 @@ async fn main() {
         | GatewayIntents::GUILD_VOICE_STATES;
 
     let (text_request_channel_tx, mut text_request_channel_rx) =
-        tokio::sync::mpsc::channel::<Request>(1);
+        tokio::sync::mpsc::channel::<TextRequest>(1);
+
+    let (text_responce_channel_tx, text_responce_channel_rx) =
+        tokio::sync::mpsc::channel::<TextResponse>(1);
 
     let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
     let en_ai = GoogleTranslator::new(Box::new(ai), Some("ru".to_string()), None).await;
@@ -32,15 +39,27 @@ async fn main() {
     tokio::spawn(async move {
         while let Some(req) = text_request_channel_rx.recv().await {
             match req {
-                Request::TextRequest(user, req) => {
+                TextRequest::TextRequest(msg_id, channel_id, user, req) => {
                     let request = discord_ai_request::DiscordAIRequest { request: req, user };
                     info!("{}", request);
                     match dispatcher.try_process_request(Box::new(request)).await {
                         Ok(resp) => {
-                            info!("Response: {}", resp);
+                            let text_resp = TextResponse {
+                                req_msg_id: Some(msg_id),
+                                channel_id: channel_id,
+                                text: resp.clone(),
+                            };
+                            match text_responce_channel_tx.send(text_resp).await {
+                                Ok(_) => {
+                                    debug!("Response: {}", resp)
+                                }
+                                Err(err) => {
+                                    error!("Error send discord responce: {:?}", err);
+                                }
+                            }
                         }
                         Err(err) => {
-                            error!("Error: {:?}", err);
+                            error!("AI Error: {:?}", err);
                         }
                     }
                 }
@@ -61,6 +80,7 @@ async fn main() {
     let mut bot = Client::builder(&config.discord_token, intents)
         .event_handler(Handler::new(
             text_request_channel_tx,
+            text_responce_channel_rx,
             config.channel_whitelist,
         ))
         .framework(framework)
