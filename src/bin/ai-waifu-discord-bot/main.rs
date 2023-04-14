@@ -1,72 +1,68 @@
-use std::env;
+mod discord_ai_request;
 
 use serenity::{client::Client, framework::StandardFramework, prelude::GatewayIntents};
 
 use songbird::{driver::DecodeMode, Config, SerenityInit};
 
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use ai_waifu::{
-    dummy_ai::DummyAI, google_translator::GoogleTranslator, handler::Handler, request::Request,
-    dispatcher::Dispatcher,
+    chatgpt::ChatGPT, config::Config as BotConfig, dispatcher::Dispatcher,
+    google_translator::GoogleTranslator, handler::Handler, request::Request,
 };
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let channel_name_part =
-        env::var("CHANNEL_NAME_PART").expect("Expected a channel name part in the environment");
-
-    let framework = StandardFramework::new()
-        //.configure(|c| c
-        //    .prefix("~"))
-        //.group(&GENERAL_GROUP); --> struct General
-        ;
+    let config = BotConfig::load();
 
     let intents = GatewayIntents::non_privileged()
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILD_VOICE_STATES;
+
+    let (text_request_channel_tx, mut text_request_channel_rx) =
+        tokio::sync::mpsc::channel::<Request>(1);
+
+    let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
+    let en_ai = GoogleTranslator::new(Box::new(ai), Some("ru".to_string()), None).await;
+
+    let mut dispatcher = Dispatcher::new(Box::new(en_ai));
+
+    tokio::spawn(async move {
+        while let Some(req) = text_request_channel_rx.recv().await {
+            match req {
+                Request::TextRequest(user, req) => {
+                    let request = discord_ai_request::DiscordAIRequest { request: req, user };
+                    info!("{}", request);
+                    match dispatcher.try_process_request(Box::new(request)).await {
+                        Ok(resp) => {
+                            info!("Response: {}", resp);
+                        }
+                        Err(err) => {
+                            error!("Error: {:?}", err);
+                        }
+                    }
+                }
+                r => {
+                    warn!("Not implemented yet: {:?}", r);
+                }
+            }
+        }
+    });
+
+    let framework = StandardFramework::new();
 
     // Here, we need to configure Songbird to decode all incoming voice packets.
     // If you want, you can do this on a per-call basis---here, we need it to
     // read the audio data that other people are sending us!
     let songbird_config = Config::default().decode_mode(DecodeMode::Decode);
 
-    let (text_request_channel_tx, mut text_request_channel_rx) =
-        tokio::sync::mpsc::channel::<Request>(1);
-
-    let ai = Box::new(DummyAI);
-    let en_ai = GoogleTranslator::new(ai, None, None).await;
-
-    let mut dispatcher = Dispatcher::new(Box::new(en_ai));    
-
-    tokio::spawn(async move {
-        while let Some(req) = text_request_channel_rx.recv().await {
-            warn!("Received request: {:?}", req);
-        }
-    });
-
-    //tokio::spawn(async move {
-    //    let req = TestRequest {
-    //        request: "Мама мыла раму.".to_string(),
-    //        author: "Master".to_string(),
-    //    };
-    //
-    //    match dispatcher.try_process_request(Box::new(req)).await {
-    //        Ok(resp) => {
-    //            warn!("Response: {}", resp);
-    //        }
-    //        Err(err) => {
-    //            warn!("Error: {:?}", err);
-    //        }
-    //    }
-    //});
-
-    let mut bot = Client::builder(&token, intents)
-        .event_handler(Handler::new(text_request_channel_tx, channel_name_part))
+    let mut bot = Client::builder(&config.discord_token, intents)
+        .event_handler(Handler::new(
+            text_request_channel_tx,
+            config.channel_whitelist,
+        ))
         .framework(framework)
         .register_songbird_from_config(songbird_config)
         .await

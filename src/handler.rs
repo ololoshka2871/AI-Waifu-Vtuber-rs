@@ -1,3 +1,4 @@
+use regex::Regex;
 use serenity::{
     async_trait,
     model::{
@@ -17,14 +18,17 @@ use crate::request::Request as Req;
 
 pub struct Handler {
     request_sender: Sender<Req>,
-    channel_name_part: String,
+    channel_whitelist: Vec<Regex>,
 }
 
 impl Handler {
-    pub fn new(request_sender: Sender<Req>, channel_name_part: String) -> Self {
+    pub fn new(request_sender: Sender<Req>, channel_whitelist: Vec<String>) -> Self {
         Self {
             request_sender,
-            channel_name_part,
+            channel_whitelist: channel_whitelist
+                .iter()
+                .map(|s| Regex::new(&s).unwrap())
+                .collect(),
         }
     }
 
@@ -100,10 +104,13 @@ impl EventHandler for Handler {
             return;
         }
 
-        // check if channel name contains the channel_name_part
-        if !Self::get_chanel_name_by_id(&ctx, Some(message.channel_id))
-            .await
-            .contains(&self.channel_name_part)
+        let channel_name = Self::get_chanel_name_by_id(&ctx, Some(message.channel_id)).await;
+
+        // check if channel is whitelisted
+        if !self
+            .channel_whitelist
+            .iter()
+            .any(|r| r.is_match(&channel_name))
         {
             return;
         }
@@ -138,12 +145,11 @@ impl EventHandler for Handler {
                 Self::get_user_name_by_id(&ctx, new.user_id).await,
                 Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await
             );
-            if channel_id
-                .name(&ctx.cache)
-                .await
-                .unwrap_or("Unknown channel".to_string())
-                .contains(&self.channel_name_part)
-            {
+
+            let channel = Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await;
+
+            // check if channel is whitelisted
+            if self.channel_whitelist.iter().any(|r| r.is_match(&channel)) {
                 if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
                     self.send_req(Req::VoiceConnected(user, *channel_id)).await;
                 } else {
