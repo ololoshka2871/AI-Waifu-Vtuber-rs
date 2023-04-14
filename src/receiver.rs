@@ -1,10 +1,10 @@
-use serenity::async_trait;
+use async_trait::async_trait;
 use songbird::{
     model::payload::{ClientDisconnect, Speaking},
     Event, EventContext, EventHandler as VoiceEventHandler,
 };
 
-pub(crate) struct Receiver;
+pub struct Receiver;
 
 impl Receiver {
     pub fn new() -> Self {
