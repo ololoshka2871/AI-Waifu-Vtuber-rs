@@ -47,7 +47,11 @@ impl Dispatcher
     /// Обработать запрос
     pub async fn try_process_request(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
         if let Some(ai) = self.processing_ai.try_lock() {
-            ai.process(request).await
+            if request.request().is_empty() {
+                Ok("".to_string())
+            } else {
+                ai.process(request).await
+            }
         } else {
             Err(AIError::Busy)
         }

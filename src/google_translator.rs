@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use google_translator;
 
+use tracing::debug;
+
 use crate::dispatcher::{AIError, AIRequest, AIinterface};
 
 /// decorator for AI interface
@@ -74,7 +76,11 @@ impl GoogleTranslator {
         let dest_lang = if let Some(dest_lang) = &self.dest_lang {
             dest_lang.clone()
         } else if let Some(source_language) = source_language {
-            source_language
+            if source_language == "en" || source_language == "auto" {
+                return Ok(text);
+            } else {
+                source_language
+            }
         } else {
             return Ok(text);
         };
@@ -95,7 +101,8 @@ impl AIinterface for GoogleTranslator {
         let r = request.request();
 
         // translate input to english
-        let (translated, lang) = self.translate_to_en(r).await?;
+        let (translated, lang) = self.translate_to_en(r.clone()).await?;
+        debug!("{r} ({lang:?}) => {translated}");
 
         // preocess AI request
         let answer = self
@@ -104,7 +111,10 @@ impl AIinterface for GoogleTranslator {
             .await?;
 
         // translate answer to user language
-        self.translate_from_en(answer, lang).await
+        let res = self.translate_from_en(answer.clone(), lang.clone()).await?;
+        debug!("{answer} => {res} ({lang:?})");
+
+        Ok(res)
     }
 }
 
