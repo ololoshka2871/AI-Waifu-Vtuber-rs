@@ -1,38 +1,49 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 
-use crate::{dispatcher::{AIinterface, AIError, AIRequest}};
+use chatgpt::prelude::{ChatGPT as ChatGPTClient, Conversation};
 
+use crate::dispatcher::{AIError, AIRequest, AIinterface};
 
 pub struct ChatGPT {
-    //model: GPT2,
-    //tokenizer: GPT2Tokenizer,
-    //device: Device,
+    _client: ChatGPTClient,
+    conversations: HashMap<String, Conversation>,
+    prompt: String,
 }
 
 impl ChatGPT {
-    pub fn new() -> Self {
+    pub fn new<S: Into<String>>(api_key: S, prompt: S) -> Self {
+        let client = match ChatGPTClient::new(api_key) {
+            Ok(c) => c,
+            Err(e) => panic!("Failed to create ChatGPT client: {e:?}"),
+        };
+
         Self {
-            //model: GPT2::new(gpt2::GPT2Config::from_file("gpt2/config.json"), Default::default()),
-            //tokenizer: GPT2Tokenizer::from_file("gpt2/vocab.json", true),
-            //device: Device::cuda_if_available(),
+            _client: client,
+            conversations: HashMap::new(),
+            prompt: prompt.into(),
         }
     }
 }
 
 #[async_trait]
 impl AIinterface for ChatGPT {
-    async fn process(&self, _request: Box<dyn AIRequest>) -> Result<String, AIError> {
-        //let input_ids = self.tokenizer.encode(request.request(), true);
-        //let input_ids = Tensor::of_slice(&input_ids).to_kind(Kind::Int64).to_device(self.device);
-        //let output = self.model.generate(Some(
-        //    [input_ids.size()[0], 1].as_ref(),
-        //), Some(100),
-        //    Some(&input_ids),
-        //    None,
-        //    None,
-        //    None,
-        //    None,
-        //    None,
-        Err(AIError::UnknownError)
+    async fn process(&mut self, _request: Box<dyn AIRequest>) -> Result<String, AIError> {
+        let request = _request.request();
+        let conversation = self
+            .conversations
+            .entry(_request.author())
+            .or_insert_with(|| self._client.new_conversation_directed(self.prompt.clone()));
+
+        conversation
+            .send_message(request)
+            .await
+            .map_err(|e| AIError::AnswerError(format!("ChatGPT error: {:?}", e)))?;
+
+        match conversation.history.last() {
+            Some(m) => Ok(m.content.clone()),
+            None => Err(AIError::UnknownError),
+        }
     }
 }

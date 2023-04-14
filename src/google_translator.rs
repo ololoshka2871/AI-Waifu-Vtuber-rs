@@ -97,7 +97,7 @@ impl GoogleTranslator {
 
 #[async_trait]
 impl AIinterface for GoogleTranslator {
-    async fn process(&self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
+    async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
         let r = request.request();
 
         // translate input to english

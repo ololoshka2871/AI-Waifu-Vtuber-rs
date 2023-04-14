@@ -12,6 +12,9 @@ pub enum AIError {
     /// Translate error
     TranslateError(String),
 
+    /// Answer error
+    AnswerError(String),
+
     /// Неизвестная ошибка
     UnknownError,
 }
@@ -29,7 +32,7 @@ pub trait AIRequest: Send {
 #[async_trait]
 pub trait AIinterface: Sync + Send {
     /// Обработать запрос
-    async fn process(&self, request: Box<dyn AIRequest>) -> Result<String, AIError>;
+    async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError>;
 }
 
 pub struct Dispatcher {
@@ -46,7 +49,7 @@ impl Dispatcher
 
     /// Обработать запрос
     pub async fn try_process_request(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
-        if let Some(ai) = self.processing_ai.try_lock() {
+        if let Some(mut ai) = self.processing_ai.try_lock() {
             if request.request().is_empty() {
                 Ok("".to_string())
             } else {

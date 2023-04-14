@@ -3,6 +3,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Config {
     pub openai_token: String, // OpenAI API token
+    pub initial_prompt: String, // Initial prompt for the AI
 }
 
 impl Config {

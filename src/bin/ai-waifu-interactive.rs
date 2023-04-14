@@ -2,11 +2,8 @@ use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use ai_waifu::{
     dispatcher::{AIRequest, Dispatcher},
-    dummy_ai::DummyAI,
     google_translator::GoogleTranslator,
-    handler::Handler,
-    request::Request,
-    config::Config,
+    config::Config, chatgpt::ChatGPT,
 };
 
 struct InteractiveRequest {
@@ -29,8 +26,8 @@ async fn main() {
 
     let config = Config::load();
 
-    let ai = Box::new(DummyAI);
-    let en_ai = GoogleTranslator::new(ai, Some("ru".to_string()), None).await;
+    let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
+    let en_ai = GoogleTranslator::new(Box::new(ai), Some("ru".to_string()), None).await;
 
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 
