@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::ops::DerefMut;
 
 use regex::Regex;
 use serenity::{
@@ -14,15 +14,14 @@ use serenity::{
 };
 
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::text_control::{TextRequest as Req, TextResponse as Resp};
 
 pub struct DiscordEventHandler {
     control_request_channel_tx: Sender<Req>,
-    text_responce_channel_rx: Arc<Mutex<Receiver<Resp>>>,
-
     channel_whitelist: Vec<Regex>,
+    rx_channel: Mutex<Option<Receiver<Resp>>>,
 }
 
 impl DiscordEventHandler {
@@ -33,11 +32,11 @@ impl DiscordEventHandler {
     ) -> Self {
         Self {
             control_request_channel_tx,
-            text_responce_channel_rx: Arc::new(Mutex::new(text_responce_channel_rx)),
             channel_whitelist: channel_whitelist
                 .iter()
                 .map(|s| Regex::new(&s).unwrap())
                 .collect(),
+            rx_channel: Mutex::new(Some(text_responce_channel_rx)),
         }
     }
 
@@ -108,28 +107,43 @@ impl EventHandler for DiscordEventHandler {
     }
 
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        info!("Cache ready");
+        let rx = {
+            let mut guard = self.rx_channel.lock().await;
+            let mut rx: Option<Receiver<Resp>> = None;
+            std::mem::swap(guard.deref_mut(), &mut rx);
+            rx
+        };
 
-        let ctx_clone = ctx.clone();
-        let response_receiver = self.text_responce_channel_rx.clone();
+        if let Some(mut rx) = rx {
+            info!("Cache ready");
 
-        tokio::spawn(async move {
-            while let Some(resp) = response_receiver.lock().await.recv().await {
-                if let Err(e) = resp.channel_id.send_message(&ctx_clone.http, |m| {
-                    m.content(resp.text);
-                    if let Some(msg_id) = resp.req_msg_id {
-                        m.reference_message(MessageReference::from((resp.channel_id, msg_id)));
+            tokio::spawn(async move {
+                while let Some(resp) = rx.recv().await {
+                    if let Err(e) = resp
+                        .channel_id
+                        .send_message(&ctx.http, |m| {
+                            m.content(resp.text);
+                            if let Some(msg_id) = resp.req_msg_id {
+                                m.reference_message(MessageReference::from((
+                                    resp.channel_id,
+                                    msg_id,
+                                )));
+                            }
+                            m.allowed_mentions(|am| {
+                                am.replied_user(false);
+                                am
+                            });
+                            m
+                        })
+                        .await
+                    {
+                        error!("Failed to send message: {:?}", e);
                     }
-                    m.allowed_mentions(|am| {
-                        am.replied_user(false);
-                        am
-                    });
-                    m
-                }).await {
-                    error!("Failed to send message: {:?}", e);
                 }
-            }
-        });
+            });
+        } else {
+            warn!("Double call cache_ready()");
+        }
     }
 
     async fn message(&self, ctx: Context, message: Message) {
