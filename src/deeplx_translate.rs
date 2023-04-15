@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use google_translator;
+
+use reqwest;
 
 use tracing::debug;
 
@@ -14,23 +15,27 @@ use crate::{
 /// if user language is english, then send output to user without translation
 /// if user language not specified, then detect it automatically
 /// if dest language not specified, then the same as input
-/// Работает нестабильно, часто получает пустой ответ от серверов гугла и падает
-pub struct GoogleTranslator {
+pub struct DeepLxTranslator {
     src_lang: Option<String>,
     dest_lang: Option<String>,
+
+    deeplx_url: String,
 
     ai: Box<dyn AIinterface>,
 }
 
-impl GoogleTranslator {
+impl DeepLxTranslator {
     pub async fn new(
         ai: Box<dyn AIinterface>,
         src_lang: Option<String>,
         dest_lang: Option<String>,
+        deeplx_url: String,
     ) -> Self {
         Self {
             src_lang,
             dest_lang,
+
+            deeplx_url,
 
             ai,
         }
@@ -42,18 +47,32 @@ impl GoogleTranslator {
         src_lang: Option<S>,
         dest_lang: S,
     ) -> Result<(String, Option<String>), String> {
-        match google_translator::translate(
-            vec![text.into()],
-            match src_lang {
+        use maplit::hashmap;
+
+        let req = hashmap! {
+            "text" => text.into(),
+            "source_lang" => match src_lang {
                 Some(s) => s.into(),
                 None => "auto".to_string(),
             },
-            dest_lang.into(),
-        )
-        .await
-        {
-            Ok(res) => Ok((res.output_text[0][0].clone(), Some(res.input_lang))),
-            Err(e) => Err(e),
+            "target_lang" => dest_lang.into(),
+        };
+
+        let client = reqwest::Client::new();
+        let resp: serde_json::Value = client
+            .post(self.deeplx_url.clone())
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if let serde_json::Value::Object(result) = resp {
+            Ok((result["data"].to_string(), None))
+        } else {
+            Err("Failed to reanslate, incorrect result".to_string())
         }
     }
 
@@ -103,7 +122,7 @@ impl GoogleTranslator {
 }
 
 #[async_trait]
-impl AIinterface for GoogleTranslator {
+impl AIinterface for DeepLxTranslator {
     async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
         let r = request.request();
 

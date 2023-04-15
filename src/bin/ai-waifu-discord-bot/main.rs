@@ -35,6 +35,10 @@ async fn main() {
     let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
     let en_ai = GoogleTranslator::new(Box::new(ai), Some("ru".to_string()), None).await;
 
+    // test google translate
+    let _ = en_ai.translate("緑色", None, "ru").await.map_err(|e| panic!("Google translate error: {}", e));
+    info!("Translating works");
+
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 
     tokio::spawn(async move {

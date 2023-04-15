@@ -1,9 +1,11 @@
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use ai_waifu::{
+    chatgpt::ChatGPT,
+    config::Config,
+    deeplx_translate::DeepLxTranslator,
     dispatcher::{AIRequest, Dispatcher},
-    google_translator::GoogleTranslator,
-    config::Config, chatgpt::ChatGPT,
+    //google_translator::GoogleTranslator,
 };
 
 struct InteractiveRequest {
@@ -27,7 +29,9 @@ async fn main() {
     let config = Config::load();
 
     let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
-    let en_ai = GoogleTranslator::new(Box::new(ai), Some("ru".to_string()), None).await;
+
+    // use this image: https://hub.docker.com/r/missuo/deeplx
+    let en_ai = DeepLxTranslator::new(Box::new(ai), Some("ru".to_string()), None, "http://localhost:1188/translate".to_string()).await;
 
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 
