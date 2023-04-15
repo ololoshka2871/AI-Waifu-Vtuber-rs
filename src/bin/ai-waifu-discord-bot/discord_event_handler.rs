@@ -16,23 +16,24 @@ use serenity::{
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info};
 
-use crate::discord_text_control::{TextRequest as Req, TextResponse as Resp};
+use crate::text_control::{TextRequest as Req, TextResponse as Resp};
 
-pub struct Handler {
-    request_sender: Sender<Req>,
-    response_receiver: Arc<Mutex<Receiver<Resp>>>,
+pub struct DiscordEventHandler {
+    control_request_channel_tx: Sender<Req>,
+    text_responce_channel_rx: Arc<Mutex<Receiver<Resp>>>,
+
     channel_whitelist: Vec<Regex>,
 }
 
-impl Handler {
+impl DiscordEventHandler {
     pub fn new(
-        request_sender: Sender<Req>,
-        response_receiver: Receiver<Resp>,
+        control_request_channel_tx: Sender<Req>,
+        text_responce_channel_rx: Receiver<Resp>,
         channel_whitelist: Vec<String>,
     ) -> Self {
         Self {
-            request_sender,
-            response_receiver: Arc::new(Mutex::new(response_receiver)),
+            control_request_channel_tx,
+            text_responce_channel_rx: Arc::new(Mutex::new(text_responce_channel_rx)),
             channel_whitelist: channel_whitelist
                 .iter()
                 .map(|s| Regex::new(&s).unwrap())
@@ -41,7 +42,7 @@ impl Handler {
     }
 
     async fn send_req(&self, req: Req) {
-        if self.request_sender.send(req).await.is_err() {
+        if self.control_request_channel_tx.send(req).await.is_err() {
             error!("Failed to send request to request handler");
         }
     }
@@ -101,7 +102,7 @@ impl Handler {
 }
 
 #[async_trait]
-impl EventHandler for Handler {
+impl EventHandler for DiscordEventHandler {
     async fn ready(&self, _: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
     }
@@ -110,7 +111,7 @@ impl EventHandler for Handler {
         info!("Cache ready");
 
         let ctx_clone = ctx.clone();
-        let response_receiver = self.response_receiver.clone();
+        let response_receiver = self.text_responce_channel_rx.clone();
 
         tokio::spawn(async move {
             while let Some(resp) = response_receiver.lock().await.recv().await {

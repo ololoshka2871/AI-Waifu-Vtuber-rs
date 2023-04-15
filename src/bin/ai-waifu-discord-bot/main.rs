@@ -1,19 +1,20 @@
 mod discord_ai_request;
+mod discord_event_handler;
+mod text_control;
+mod voice_receiver;
 
 use serenity::{client::Client, framework::StandardFramework, prelude::GatewayIntents};
 
 use songbird::{driver::DecodeMode, Config, SerenityInit};
 
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 
 use ai_waifu::{
-    chatgpt::ChatGPT,
-    config::Config as BotConfig,
-    discord_text_control::{TextRequest, TextResponse},
-    dispatcher::Dispatcher,
+    chatgpt::ChatGPT, config::Config as BotConfig, dispatcher::Dispatcher,
     google_translator::GoogleTranslator,
-    handler::Handler,
 };
+use discord_event_handler::DiscordEventHandler;
+use text_control::{TextRequest, TextResponse};
 
 #[tokio::main]
 async fn main() {
@@ -25,7 +26,7 @@ async fn main() {
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILD_VOICE_STATES;
 
-    let (text_request_channel_tx, mut text_request_channel_rx) =
+    let (control_request_channel_tx, mut control_request_channel_rx) =
         tokio::sync::mpsc::channel::<TextRequest>(1);
 
     let (text_responce_channel_tx, text_responce_channel_rx) =
@@ -37,7 +38,7 @@ async fn main() {
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 
     tokio::spawn(async move {
-        while let Some(req) = text_request_channel_rx.recv().await {
+        while let Some(req) = control_request_channel_rx.recv().await {
             match req {
                 TextRequest::TextRequest(msg_id, channel_id, user, req) => {
                     let request = discord_ai_request::DiscordAIRequest { request: req, user };
@@ -78,8 +79,8 @@ async fn main() {
     let songbird_config = Config::default().decode_mode(DecodeMode::Decode);
 
     let mut bot = Client::builder(&config.discord_token, intents)
-        .event_handler(Handler::new(
-            text_request_channel_tx,
+        .event_handler(DiscordEventHandler::new(
+            control_request_channel_tx,
             text_responce_channel_rx,
             config.channel_whitelist,
         ))
