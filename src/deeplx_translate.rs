@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use reqwest;
+use reqwest::{self, IntoUrl, Url};
 
 use tracing::debug;
 
@@ -12,41 +12,63 @@ use crate::{
 /// decorator for AI interface
 /// get input from user, translate it to english and send to AI
 /// get output from AI, translate it to user language and send to user
-/// if user language is english, then send output to user without translation
-/// if user language not specified, then detect it automatically
-/// if dest language not specified, then the same as input
 pub struct DeepLxTranslator {
     src_lang: Option<String>,
-    dest_lang: Option<String>,
+    dest_lang: String,
 
-    deeplx_url: String,
+    deeplx_url: Url,
 
     ai: Box<dyn AIinterface>,
 }
 
 impl DeepLxTranslator {
-    pub async fn new(
+    /**
+     * ai - An AI object implements AIinterface
+     * src_lang - Source text language or None (Auto)
+     * dest_lang - If None - src lang
+     * deeplx_url - DeepLx service URL. See https://hub.docker.com/r/missuo/deeplx docker image
+     */
+    pub fn new<URL: IntoUrl>(
         ai: Box<dyn AIinterface>,
-        src_lang: Option<String>,
+        mut src_lang: Option<String>,
         dest_lang: Option<String>,
-        deeplx_url: String,
+        url: URL,
     ) -> Self {
+        assert!(
+            src_lang.is_some() || dest_lang.is_some(),
+            "Langs mast not be None both in a same time!"
+        );
+
+        let dl = if let Some(dest_lang) = dest_lang {
+            if src_lang.is_none() {
+                src_lang = Some(dest_lang.clone())
+            }
+            dest_lang
+        } else {
+            "en".to_string()
+        };
+
         Self {
             src_lang,
-            dest_lang,
+            dest_lang: dl,
 
-            deeplx_url,
+            deeplx_url: url.into_url().unwrap(),
 
             ai,
         }
     }
 
-    pub async fn translate<S: Into<String>>(
+    pub async fn translate<S, SRC, DEST>(
         &self,
         text: S,
-        src_lang: Option<S>,
-        dest_lang: S,
-    ) -> Result<(String, Option<String>), String> {
+        src_lang: Option<SRC>,
+        dest_lang: DEST,
+    ) -> Result<String, String>
+    where
+        S: Into<String>,
+        SRC: Into<String>,
+        DEST: Into<String>,
+    {
         use maplit::hashmap;
 
         let req = hashmap! {
@@ -70,53 +92,13 @@ impl DeepLxTranslator {
             .map_err(|e| e.to_string())?;
 
         if let serde_json::Value::Object(result) = resp {
-            Ok((result["data"].to_string(), None))
-        } else {
-            Err("Failed to reanslate, incorrect result".to_string())
-        }
-    }
-
-    async fn translate_to_en(&self, text: String) -> Result<(String, Option<String>), AIError> {
-        let src_lang = if let Some(src_lang) = &self.src_lang {
-            Some(src_lang.clone())
-        } else {
-            None
-        };
-
-        if src_lang.is_none() || src_lang.as_deref().unwrap() != "en" {
-            // translate to english
-            Ok(self
-                .translate(text, src_lang, "en".to_string())
-                .await
-                .map_err(|e| AIError::TranslateError(e))?)
-        } else {
-            Ok((text, None))
-        }
-    }
-
-    async fn translate_from_en(
-        &self,
-        text: String,
-        source_language: Option<String>,
-    ) -> Result<String, AIError> {
-        let dest_lang = if let Some(dest_lang) = &self.dest_lang {
-            dest_lang.clone()
-        } else if let Some(source_language) = source_language {
-            if source_language == "en" || source_language == "auto" {
-                return Ok(text);
+            if let serde_json::Value::String(s) = &result["data"] {
+                Ok(s.clone())
             } else {
-                source_language
+                Ok(result["data"].to_string())
             }
         } else {
-            return Ok(text);
-        };
-
-        match self
-            .translate(text, Some("en".to_string()), dest_lang)
-            .await
-        {
-            Ok((res, _)) => Ok(res),
-            Err(e) => Err(AIError::TranslateError(e)),
+            Err("Failed to reanslate, incorrect result".to_string())
         }
     }
 }
@@ -127,8 +109,11 @@ impl AIinterface for DeepLxTranslator {
         let r = request.request();
 
         // translate input to english
-        let (translated, lang) = self.translate_to_en(r.clone()).await?;
-        debug!("{r} ({lang:?}) => {translated}");
+        let translated = self
+            .translate(r.clone(), self.src_lang.clone(), "en")
+            .await
+            .map_err(|e| AIError::TranslateError(e))?;
+        debug!("{r} ({lang:?}) => {translated}", lang = &self.src_lang);
 
         // preocess AI request
         let answer = self
@@ -137,8 +122,11 @@ impl AIinterface for DeepLxTranslator {
             .await?;
 
         // translate answer to user language
-        let res = self.translate_from_en(answer.clone(), lang.clone()).await?;
-        debug!("{answer} => {res} ({lang:?})");
+        let res = self
+            .translate(answer.clone(), Some("en"), self.dest_lang.clone())
+            .await
+            .map_err(|e| AIError::TranslateError(e))?;
+        debug!("{answer} => {res} ({lang})", lang = &self.dest_lang);
 
         Ok(res)
     }

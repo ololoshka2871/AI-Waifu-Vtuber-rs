@@ -23,7 +23,7 @@ pub struct GoogleTranslator {
 }
 
 impl GoogleTranslator {
-    pub async fn new(
+    pub fn new(
         ai: Box<dyn AIinterface>,
         src_lang: Option<String>,
         dest_lang: Option<String>,

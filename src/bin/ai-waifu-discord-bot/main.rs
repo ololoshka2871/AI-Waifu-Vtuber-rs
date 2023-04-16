@@ -10,8 +10,11 @@ use songbird::{driver::DecodeMode, Config, SerenityInit};
 use tracing::{debug, error, info, warn};
 
 use ai_waifu::{
-    chatgpt::ChatGPT, config::Config as BotConfig, dispatcher::Dispatcher,
-    google_translator::GoogleTranslator,
+    chatgpt::ChatGPT,
+    config::Config as BotConfig,
+    deeplx_translate::DeepLxTranslator,
+    dispatcher::Dispatcher,
+    //google_translator::GoogleTranslator,
 };
 use discord_event_handler::DiscordEventHandler;
 use text_control::{TextRequest, TextResponse};
@@ -33,11 +36,13 @@ async fn main() {
         tokio::sync::mpsc::channel::<TextResponse>(1);
 
     let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
-    let en_ai = GoogleTranslator::new(Box::new(ai), Some("ru".to_string()), None).await;
 
-    // test google translate
-    let _ = en_ai.translate("緑色", None, "ru").await.map_err(|e| panic!("Google translate error: {}", e));
-    info!("Translating works");
+    let en_ai = DeepLxTranslator::new(
+        Box::new(ai),
+        Some(config.src_lang),
+        Some(config.dest_lang),
+        config.deeplx_url,
+    );
 
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 

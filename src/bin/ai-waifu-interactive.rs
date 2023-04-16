@@ -30,8 +30,12 @@ async fn main() {
 
     let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
 
-    // use this image: https://hub.docker.com/r/missuo/deeplx
-    let en_ai = DeepLxTranslator::new(Box::new(ai), Some("ru".to_string()), None, "http://localhost:1188/translate".to_string()).await;
+    let en_ai = DeepLxTranslator::new(
+        Box::new(ai),
+        Some(config.src_lang),
+        Some(config.dest_lang),
+        config.deeplx_url,
+    );
 
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 

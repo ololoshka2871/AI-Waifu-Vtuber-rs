@@ -19,7 +19,7 @@ mod tests {
     #[tokio::test]
     async fn test_translate_ru() {
         let ai = Box::new(DummyAI);
-        let en_ai = GoogleTranslator::new(ai, Some("ru".to_string()), None).await;
+        let en_ai = GoogleTranslator::new(ai, Some("ru".to_string()), None);
     
         let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 
