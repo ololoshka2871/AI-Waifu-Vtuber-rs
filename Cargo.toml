@@ -28,6 +28,7 @@ chatgpt_rs = { version = "1.1.1" }
 regex = "1.7"
 reqwest = "0.11"
 maplit = "1"
+wav = "1"
 
 [lib]
 name = "ai_waifu"

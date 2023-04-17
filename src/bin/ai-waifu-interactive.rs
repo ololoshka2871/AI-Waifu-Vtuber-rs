@@ -4,7 +4,7 @@ use ai_waifu::{
     chatgpt::ChatGPT,
     config::Config,
     deeplx_translate::DeepLxTranslator,
-    dispatcher::{AIRequest, Dispatcher},
+    dispatcher::{AIRequest, Dispatcher}, silerio_tts::SilerioTTS,
     //google_translator::GoogleTranslator,
 };
 

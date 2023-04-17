@@ -8,4 +8,5 @@
     "DeepLx_Url": "http://localhost:1188/translate",
     "Speaker_lang": "auto",
     "Answer_lang": "en"
+    "TTS_Service_Url": "http://localhost:8961/say"
 }

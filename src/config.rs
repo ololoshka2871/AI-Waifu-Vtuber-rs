@@ -25,6 +25,8 @@ pub struct Config {
     pub src_lang: String, // Optional request language
     #[serde(rename = "Answer_lang")]
     pub dest_lang: String, // Answer langualge
+    #[serde(rename = "TTS_Service_Url")]
+    pub tts_service_url: String,
 }
 
 impl Config {
