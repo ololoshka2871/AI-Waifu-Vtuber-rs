@@ -1,7 +1,8 @@
-use reqwest::{IntoUrl, Url};
-use wav;
+use std::{io::Cursor};
 
-use tracing::debug;
+use reqwest::{IntoUrl, Url};
+
+use bytes::Bytes;
 
 pub struct SilerioTTS {
     server_url: Url,
@@ -14,15 +15,22 @@ impl SilerioTTS {
         }
     }
 
-    pub async fn say<S, SP>(&self, text: S, voice_id: SP) -> Result<(wav::Header, wav::BitDepth), String>
+    pub async fn say<S, SP>(&self, text: S, voice_id: Option<SP>) -> Result<Cursor<Bytes>, String>
     where
         S: Into<String>,
         SP: Into<String>,
     {
         let client = reqwest::Client::new();
         let res = client
-            .post(self.server_url.clone())
-            .query(&[("voice_id", voice_id.into())])
+            .post(self.server_url.clone());
+
+        let res = if let Some(voice_id) = voice_id {
+            res.query(&[("voice_id", voice_id.into())])
+        } else {
+            res
+        };
+
+        let res = res
             .body(text.into())
             .send()
             .await
@@ -34,11 +42,6 @@ impl SilerioTTS {
             .await
             .map_err(|e| format!("Http error: {}", e))?;
 
-        let mut res = std::io::Cursor::new(res);
-        let (header, wav_data) = wav::read(&mut res).map_err(|e| format!("Wav error: {}", e))?;
-
-        debug!("Got audio file with header: {:?}", header);
-
-        Ok((header, wav_data))
+        Ok(Cursor::new(res))
     }
 }
