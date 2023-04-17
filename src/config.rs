@@ -1,8 +1,12 @@
 use reqwest::Url;
 use serde::Deserialize;
 
-fn default_url() -> Url {
+fn default_deeplx_url() -> Url {
     Url::parse("http://localhost:1188/translate").unwrap()
+}
+
+fn default_selirio_bridge_url() -> Url {
+    Url::parse("http://localhost:8961/say").unwrap()
 }
 
 fn auto() -> String {
@@ -19,14 +23,16 @@ pub struct Config {
     pub discord_token: String, // Discord bot token
     #[serde(rename = "Discord_channel_whitelist")]
     pub channel_whitelist: Vec<String>, // Discord channel whitelist (empty = all channels), supports wildcards
-    #[serde(rename = "DeepLx_Url", default = "default_url")]
+    #[serde(rename = "DeepLx_Url", default = "default_deeplx_url")]
     pub deeplx_url: Url, // Optional DeepLx translatin service Url
     #[serde(rename = "Speaker_lang", default = "auto")]
     pub src_lang: String, // Optional request language
     #[serde(rename = "Answer_lang")]
     pub dest_lang: String, // Answer langualge
-    #[serde(rename = "TTS_Service_Url")]
-    pub tts_service_url: String,
+    #[serde(rename = "TTS_Service_Url", default = "default_selirio_bridge_url")]
+    pub tts_service_url: Url, // TTS service URL
+    #[serde(rename = "Voice_character")]
+    pub voice_character: Option<String>, // Voice character name (like "ksenia")
 }
 
 impl Config {

@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use serenity::model::{id::ChannelId, prelude::MessageId, user::User};
 
 #[derive(Debug, Clone)]
@@ -22,4 +24,7 @@ pub struct TextResponse {
 
     // Message
     pub text: String,
+
+    // TTS if any
+    pub tts: Option<Cursor<bytes::Bytes>>,
 }

@@ -13,7 +13,7 @@ use ai_waifu::{
     chatgpt::ChatGPT,
     config::Config as BotConfig,
     deeplx_translate::DeepLxTranslator,
-    dispatcher::Dispatcher,
+    dispatcher::Dispatcher, silerio_tts::SilerioTTS,
     //google_translator::GoogleTranslator,
 };
 use discord_event_handler::DiscordEventHandler;
@@ -44,6 +44,8 @@ async fn main() {
         config.deeplx_url,
     );
 
+    let tts = SilerioTTS::new(config.tts_service_url);
+
     let mut dispatcher = Dispatcher::new(Box::new(en_ai));
 
     tokio::spawn(async move {
@@ -58,6 +60,13 @@ async fn main() {
                                 req_msg_id: Some(msg_id),
                                 channel_id: channel_id,
                                 text: resp.clone(),
+                                tts: match tts.say(&resp, config.voice_character.clone()).await{
+                                    Ok(tts) => Some(tts),
+                                    Err(err) => {
+                                        error!("TTS error: {:?}", err);
+                                        None
+                                    }
+                                }, 
                             };
                             match text_responce_channel_tx.send(text_resp).await {
                                 Ok(_) => {

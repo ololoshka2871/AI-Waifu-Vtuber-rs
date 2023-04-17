@@ -9,4 +9,5 @@
     "Speaker_lang": "auto",
     "Answer_lang": "en"
     "TTS_Service_Url": "http://localhost:8961/say"
+    //"Voice_character": "kseniya" // optional
 }

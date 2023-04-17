@@ -1,4 +1,4 @@
-use std::ops::DerefMut;
+use std::{ops::DerefMut, borrow::Cow};
 
 use regex::Regex;
 use serenity::{
@@ -133,6 +133,14 @@ impl EventHandler for DiscordEventHandler {
                                 am.replied_user(false);
                                 am
                             });
+
+                            if let Some(tts_data) = resp.tts {
+                                m.add_file(serenity::model::prelude::AttachmentType::Bytes {
+                                    data: Cow::Owned(tts_data.into_inner().to_vec()),
+                                    filename: "TTS.wav".to_string(),
+                                });
+                            }
+
                             m
                         })
                         .await
