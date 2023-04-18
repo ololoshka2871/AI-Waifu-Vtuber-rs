@@ -12,22 +12,21 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
 use ai_waifu::{
-    chatgpt::ChatGPT,
+    chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
     config::Config as BotConfig,
-    deeplx_translate::DeepLxTranslator,
-    dispatcher::Dispatcher,
+    dispatcher::{AIBuilder, Dispatcher},
     silerio_tts::SilerioTTS,
-    //google_translator::GoogleTranslator,
 };
 use discord_event_handler::DiscordEventHandler;
 use text_control::{TextRequest, TextResponse};
 
-async fn dispatcher_coroutine(
-    mut dispatcher: Dispatcher,
+async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
+    mut dispatcher: Dispatcher<T>,
     mut control_request_channel_rx: Receiver<TextRequest>,
     text_responce_channel_tx: Sender<TextResponse>,
     tts_character: Option<String>,
     tts: SilerioTTS,
+    busy_messages_generator: F,
 ) {
     use voice_ch_map::State;
 
@@ -39,7 +38,7 @@ async fn dispatcher_coroutine(
                 guild_id,
                 channel_id,
                 msg_id,
-                user,
+                user: _,
                 text,
             } => {
                 let guild_id = if let Some(gi) = guild_id {
@@ -51,7 +50,7 @@ async fn dispatcher_coroutine(
 
                 let request = discord_ai_request::DiscordAIRequest {
                     request: text,
-                    user,
+                    channel_id,
                 };
                 info!("{}", request);
                 match dispatcher.try_process_request(Box::new(request)).await {
@@ -76,9 +75,27 @@ async fn dispatcher_coroutine(
                                 None
                             },
                         };
+
                         match text_responce_channel_tx.send(text_resp).await {
                             Ok(_) => {
                                 debug!("Response: {}", resp)
+                            }
+                            Err(err) => {
+                                error!("Error send discord responce: {:?}", err);
+                            }
+                        }
+                    }
+                    Err(ai_waifu::dispatcher::AIError::Busy) => {
+                        let text_resp = TextResponse {
+                            req_msg_id: Some(msg_id),
+                            channel_id: channel_id,
+                            text: busy_messages_generator(),
+                            tts: None,
+                        };
+
+                        match text_responce_channel_tx.send(text_resp).await {
+                            Ok(_) => {
+                                debug!("Send busy message to channel {channel_id}")
                             }
                             Err(err) => {
                                 error!("Error send discord responce: {:?}", err);
@@ -134,18 +151,11 @@ async fn main() {
     let (text_responce_channel_tx, text_responce_channel_rx) =
         tokio::sync::mpsc::channel::<TextResponse>(1);
 
-    let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
-
-    let en_ai = DeepLxTranslator::new(
-        Box::new(ai),
-        Some(config.src_lang),
-        Some(config.dest_lang),
-        config.deeplx_url,
-    );
+    let dispatcher = Dispatcher::new(ChatGPTEnAIBuilder::from(&config));
 
     let tts = SilerioTTS::new(config.tts_service_url);
 
-    let dispatcher = Dispatcher::new(Box::new(en_ai));
+    let busy_messages = config.busy_messages;
 
     tokio::spawn(dispatcher_coroutine(
         dispatcher,
@@ -153,6 +163,13 @@ async fn main() {
         text_responce_channel_tx,
         config.voice_character,
         tts,
+        move || {
+            use rand::Rng;
+
+            let mut rng = rand::thread_rng();
+            let idx = rng.gen_range(0..busy_messages.len());
+            busy_messages[idx].clone()
+        },
     ));
 
     let framework = StandardFramework::new();

@@ -16,7 +16,7 @@ impl AIRequest for TranslatedAIRequest {
         self.en_text.clone()
     }
 
-    fn author(&self) -> String {
-        self.original.author()
+    fn channel(&self) -> String {
+        self.original.channel()
     }
 }

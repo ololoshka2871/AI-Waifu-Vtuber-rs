@@ -7,10 +7,8 @@ use clap::Parser;
 
 use ai_waifu::{
     audio_dev::get_audio_device_by_name,
-    //google_translator::GoogleTranslator,
-    chatgpt::ChatGPT,
+    chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
     config::Config,
-    deeplx_translate::DeepLxTranslator,
     dispatcher::{AIRequest, Dispatcher},
     silerio_tts::SilerioTTS,
 };
@@ -26,7 +24,7 @@ impl AIRequest for InteractiveRequest {
         self.request.clone()
     }
 
-    fn author(&self) -> String {
+    fn channel(&self) -> String {
         "interactive".to_string()
     }
 }
@@ -118,16 +116,7 @@ async fn main() {
 
     let config = Config::load();
 
-    let ai = ChatGPT::new(config.openai_token, config.initial_prompt);
-
-    let en_ai = DeepLxTranslator::new(
-        Box::new(ai),
-        Some(config.src_lang),
-        Some(config.dest_lang),
-        config.deeplx_url,
-    );
-
-    let mut dispatcher = Dispatcher::new(Box::new(en_ai));
+    let mut dispatcher = Dispatcher::new(ChatGPTEnAIBuilder::from(&config));
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();

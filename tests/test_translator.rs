@@ -3,7 +3,7 @@ mod tests {
 
     struct TestRequest {
         request: String,
-        author: String,
+        channel: String,
     }
 
     impl AIRequest for TestRequest {
@@ -11,21 +11,28 @@ mod tests {
             self.request.clone()
         }
 
-        fn author(&self) -> String {
-            self.author.clone()
+        fn channel(&self) -> String {
+            self.channel.clone()
+        }
+    }
+
+    struct DummuENAIConstrictor;
+
+    impl AIBuilder for DummuENAIConstrictor {
+        fn build(&mut self) -> Box<dyn AIinterface> {
+            let ai = Box::new(DummyAI);
+            let en_ai = GoogleTranslator::new(ai, Some("ru".to_string()), None);
+            Box::new(en_ai)
         }
     }
 
     #[tokio::test]
     async fn test_translate_ru() {
-        let ai = Box::new(DummyAI);
-        let en_ai = GoogleTranslator::new(ai, Some("ru".to_string()), None);
-    
-        let mut dispatcher = Dispatcher::new(Box::new(en_ai));
+        let mut dispatcher = Dispatcher::new(DummuENAIConstrictor{});
 
         let req = TestRequest {
             request: "Мама мыла раму.".to_string(),
-            author: "Master".to_string(),
+            channel: "Master".to_string(),
         };
 
         assert!(dispatcher.try_process_request(Box::new(req)).await.is_ok());

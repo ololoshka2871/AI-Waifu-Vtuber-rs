@@ -10,4 +10,8 @@
     "Answer_lang": "en"
     "TTS_Service_Url": "http://localhost:8961/say"
     //"Voice_character": "kseniya" // optional
+    "Busy_messages": [
+        "I'm busy, please wait",
+        "Wait please, i'm thinking!"
+    ]
 }

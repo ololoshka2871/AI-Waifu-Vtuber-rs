@@ -33,6 +33,8 @@ pub struct Config {
     pub tts_service_url: Url, // TTS service URL
     #[serde(rename = "Voice_character")]
     pub voice_character: Option<String>, // Voice character name (like "ksenia")
+    #[serde(rename = "Busy_messages")]
+    pub busy_messages: Vec<String>, // Messages to send when the AI is busy
 }
 
 impl Config {

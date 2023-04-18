@@ -1,9 +1,10 @@
 use ai_waifu::dispatcher::AIRequest;
+use serenity::model::prelude::ChannelId;
 
 
 pub(crate) struct DiscordAIRequest {
     pub request: String,
-    pub user: serenity::model::user::User,
+    pub channel_id: ChannelId,
 }
 
 impl AIRequest for DiscordAIRequest {
@@ -11,13 +12,13 @@ impl AIRequest for DiscordAIRequest {
         self.request.clone()
     }
 
-    fn author(&self) -> String {
-        self.user.name.clone()
+    fn channel(&self) -> String {
+        format!("#{}", self.channel_id)
     }
 }
 
 impl std::fmt::Display for DiscordAIRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.user.name, self.request)
+        write!(f, "#{}: {}", self.channel_id, self.request)
     }
 }
