@@ -1,6 +1,6 @@
 use std::{borrow::Cow, ops::DerefMut};
 
-use regex::Regex;
+use regex::RegexSet;
 use serenity::{
     async_trait,
     model::{
@@ -20,7 +20,7 @@ use crate::text_control::{TextRequest as Req, TextResponse as Resp};
 
 pub struct DiscordEventHandler {
     control_request_channel_tx: Sender<Req>,
-    channel_whitelist: Vec<Regex>,
+    channel_whitelist: RegexSet,
     rx_channel: Mutex<Option<Receiver<Resp>>>,
 }
 
@@ -32,10 +32,7 @@ impl DiscordEventHandler {
     ) -> Self {
         Self {
             control_request_channel_tx,
-            channel_whitelist: channel_whitelist
-                .iter()
-                .map(|s| Regex::new(&s).unwrap())
-                .collect(),
+            channel_whitelist: RegexSet::new(channel_whitelist).unwrap(),
             rx_channel: Mutex::new(Some(text_responce_channel_rx)),
         }
     }
@@ -97,6 +94,11 @@ impl DiscordEventHandler {
         } else {
             "None".to_string()
         }
+    }
+
+    async fn is_channel_allowed(&self, ctx: &Context, channel_id: &ChannelId) -> bool {
+        let ch_name = Self::get_chanel_name_by_id(ctx, Some(*channel_id)).await;
+        self.channel_whitelist.is_match(ch_name.as_str())
     }
 }
 
@@ -160,14 +162,8 @@ impl EventHandler for DiscordEventHandler {
             return;
         }
 
-        let channel_name = Self::get_chanel_name_by_id(&ctx, Some(message.channel_id)).await;
-
         // check if channel is whitelisted
-        if !self
-            .channel_whitelist
-            .iter()
-            .any(|r| r.is_match(&channel_name))
-        {
+        if !self.is_channel_allowed(&ctx, &message.channel_id).await {
             return;
         }
 
@@ -202,15 +198,14 @@ impl EventHandler for DiscordEventHandler {
 
         // on enter channel
         if let Some(channel_id) = &new.channel_id {
-            let channel = Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await;
             debug!(
                 "{} joined voice channel {}",
                 Self::get_user_name_by_id(&ctx, new.user_id).await,
-                channel
+                Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await
             );
 
             // check if channel is whitelisted
-            if self.channel_whitelist.iter().any(|r| r.is_match(&channel)) {
+            if self.is_channel_allowed(&ctx, channel_id).await {
                 if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
                     self.send_req(Req::VoiceConnected {
                         guild_id: new.guild_id,
@@ -225,7 +220,6 @@ impl EventHandler for DiscordEventHandler {
         }
 
         if let Some(before_id) = &old {
-            let channel = Self::get_chanel_name_by_id(&ctx, before_id.channel_id).await;
             debug!(
                 "{} leaved channel {}",
                 Self::get_user_name_by_id(&ctx, new.user_id).await,
@@ -233,7 +227,7 @@ impl EventHandler for DiscordEventHandler {
             );
             if let Some(before_ch_id) = before_id.channel_id {
                 // check if channel is whitelisted
-                if self.channel_whitelist.iter().any(|r| r.is_match(&channel)) {
+                if self.is_channel_allowed(&ctx, &before_ch_id).await {
                     if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
                         self.send_req(Req::VoiceDisconnected {
                             guild_id: before_id.guild_id,
