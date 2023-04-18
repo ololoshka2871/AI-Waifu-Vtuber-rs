@@ -1,17 +1,35 @@
 use std::io::Cursor;
 
-use serenity::model::{id::ChannelId, prelude::MessageId, user::User};
+use serenity::model::{
+    id::{ChannelId, GuildId},
+    prelude::MessageId,
+    user::User,
+};
 
 #[derive(Debug, Clone)]
 pub enum TextRequest {
     /// Simple text message request
-    TextRequest(MessageId, ChannelId, User, String),
+    TextRequest {
+        guild_id: Option<GuildId>,
+        channel_id: ChannelId,
+        msg_id: MessageId,
+        user: User,
+        text: String,
+    },
 
     /// User joined a voice channel
-    VoiceConnected(User, ChannelId),
+    VoiceConnected {
+        guild_id: Option<GuildId>,
+        channel_id: ChannelId,
+        user: User,
+    },
 
     /// User leaved a voice channel
-    VoiceDisconnected(User, ChannelId),
+    VoiceDisconnected{
+        guild_id: Option<GuildId>,
+        channel_id: ChannelId,
+        user: User,
+    },
 }
 
 #[derive(Debug, Clone)]

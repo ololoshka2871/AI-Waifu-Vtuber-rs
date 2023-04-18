@@ -1,23 +1,122 @@
 mod discord_ai_request;
 mod discord_event_handler;
 mod text_control;
+mod voice_ch_map;
 mod voice_receiver;
 
 use serenity::{client::Client, framework::StandardFramework, prelude::GatewayIntents};
 
 use songbird::{driver::DecodeMode, Config, SerenityInit};
 
+use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
 use ai_waifu::{
     chatgpt::ChatGPT,
     config::Config as BotConfig,
     deeplx_translate::DeepLxTranslator,
-    dispatcher::Dispatcher, silerio_tts::SilerioTTS,
+    dispatcher::Dispatcher,
+    silerio_tts::SilerioTTS,
     //google_translator::GoogleTranslator,
 };
 use discord_event_handler::DiscordEventHandler;
 use text_control::{TextRequest, TextResponse};
+
+async fn dispatcher_coroutine(
+    mut dispatcher: Dispatcher,
+    mut control_request_channel_rx: Receiver<TextRequest>,
+    text_responce_channel_tx: Sender<TextResponse>,
+    tts_character: Option<String>,
+    tts: SilerioTTS,
+) {
+    use voice_ch_map::State;
+
+    let mut giuld_ch_user_map = voice_ch_map::VoiceChannelMap::new();
+
+    while let Some(req) = control_request_channel_rx.recv().await {
+        match req {
+            TextRequest::TextRequest {
+                guild_id,
+                channel_id,
+                msg_id,
+                user,
+                text,
+            } => {
+                let guild_id = if let Some(gi) = guild_id {
+                    gi
+                } else {
+                    error!("Direct message not supported yet!");
+                    continue;
+                };
+
+                let request = discord_ai_request::DiscordAIRequest {
+                    request: text,
+                    user,
+                };
+                info!("{}", request);
+                match dispatcher.try_process_request(Box::new(request)).await {
+                    Ok(resp) => {
+                        let tts_data = match tts.say(&resp, tts_character.clone()).await {
+                            Ok(tts) => Some(tts),
+                            Err(err) => {
+                                error!("TTS error: {:?}", err);
+                                None
+                            }
+                        };
+
+                        let text_resp = TextResponse {
+                            req_msg_id: Some(msg_id),
+                            channel_id: channel_id,
+                            text: resp.clone(),
+                            tts: if giuld_ch_user_map.get_voice_state(guild_id, channel_id)
+                                == State::TextOnly
+                            {
+                                tts_data
+                            } else {
+                                None
+                            },
+                        };
+                        match text_responce_channel_tx.send(text_resp).await {
+                            Ok(_) => {
+                                debug!("Response: {}", resp)
+                            }
+                            Err(err) => {
+                                error!("Error send discord responce: {:?}", err);
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        error!("AI Error: {:?}", err);
+                    }
+                }
+            }
+            TextRequest::VoiceConnected {
+                guild_id,
+                channel_id,
+                ..
+            } => {
+                if let Some(gid) = guild_id {
+                    giuld_ch_user_map.set_voice_state(gid, channel_id, State::Voice);
+                    debug!("{:?}", &giuld_ch_user_map);
+                } else {
+                    warn!("Not a guild event, ignore!");
+                }
+            }
+            TextRequest::VoiceDisconnected {
+                guild_id,
+                channel_id,
+                ..
+            } => {
+                if let Some(gid) = guild_id {
+                    giuld_ch_user_map.set_voice_state(gid, channel_id, State::TextOnly);
+                    debug!("{:?}", &giuld_ch_user_map);
+                } else {
+                    warn!("Not a guild event, ignore!");
+                }
+            }
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -29,7 +128,7 @@ async fn main() {
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILD_VOICE_STATES;
 
-    let (control_request_channel_tx, mut control_request_channel_rx) =
+    let (control_request_channel_tx, control_request_channel_rx) =
         tokio::sync::mpsc::channel::<TextRequest>(1);
 
     let (text_responce_channel_tx, text_responce_channel_rx) =
@@ -46,48 +145,15 @@ async fn main() {
 
     let tts = SilerioTTS::new(config.tts_service_url);
 
-    let mut dispatcher = Dispatcher::new(Box::new(en_ai));
+    let dispatcher = Dispatcher::new(Box::new(en_ai));
 
-    tokio::spawn(async move {
-        while let Some(req) = control_request_channel_rx.recv().await {
-            match req {
-                TextRequest::TextRequest(msg_id, channel_id, user, req) => {
-                    let request = discord_ai_request::DiscordAIRequest { request: req, user };
-                    info!("{}", request);
-                    match dispatcher.try_process_request(Box::new(request)).await {
-                        Ok(resp) => {
-                            let text_resp = TextResponse {
-                                req_msg_id: Some(msg_id),
-                                channel_id: channel_id,
-                                text: resp.clone(),
-                                tts: match tts.say(&resp, config.voice_character.clone()).await{
-                                    Ok(tts) => Some(tts),
-                                    Err(err) => {
-                                        error!("TTS error: {:?}", err);
-                                        None
-                                    }
-                                }, 
-                            };
-                            match text_responce_channel_tx.send(text_resp).await {
-                                Ok(_) => {
-                                    debug!("Response: {}", resp)
-                                }
-                                Err(err) => {
-                                    error!("Error send discord responce: {:?}", err);
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            error!("AI Error: {:?}", err);
-                        }
-                    }
-                }
-                r => {
-                    warn!("Not implemented yet: {:?}", r);
-                }
-            }
-        }
-    });
+    tokio::spawn(dispatcher_coroutine(
+        dispatcher,
+        control_request_channel_rx,
+        text_responce_channel_tx,
+        config.voice_character,
+        tts,
+    ));
 
     let framework = StandardFramework::new();
 
@@ -112,101 +178,3 @@ async fn main() {
         .await
         .map_err(|why| info!("Client ended: {:?}", why));
 }
-
-//#[group]
-//#[commands(join, leave, ping)]
-//struct General;
-//
-//#[command]
-//#[only_in(guilds)]
-//async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-//    let connect_to = match args.single::<u64>() {
-//        Ok(id) => ChannelId(id),
-//        Err(_) => {
-//            check_msg(msg.reply(ctx, "Requires a valid voice channel ID be given").await);
-//
-//            return Ok(());
-//        },
-//    };
-//
-//    let guild = msg.guild(&ctx.cache).unwrap();
-//    let guild_id = guild.id;
-//
-//    let manager = songbird::get(ctx).await
-//        .expect("Songbird Voice client placed in at initialisation.").clone();
-//
-//    let (handler_lock, conn_result) = manager.join(guild_id, connect_to).await;
-//
-//    if let Ok(_) = conn_result {
-//        // NOTE: this skips listening for the actual connection result.
-//        let mut handler = handler_lock.lock().await;
-//
-//        handler.add_global_event(
-//            CoreEvent::SpeakingStateUpdate.into(),
-//            Receiver::new(),
-//        );
-//
-//        handler.add_global_event(
-//            CoreEvent::SpeakingUpdate.into(),
-//            Receiver::new(),
-//        );
-//
-//        handler.add_global_event(
-//            CoreEvent::VoicePacket.into(),
-//            Receiver::new(),
-//        );
-//
-//        handler.add_global_event(
-//            CoreEvent::RtcpPacket.into(),
-//            Receiver::new(),
-//        );
-//
-//        handler.add_global_event(
-//            CoreEvent::ClientDisconnect.into(),
-//            Receiver::new(),
-//        );
-//
-//        check_msg(msg.channel_id.say(&ctx.http, &format!("Joined {}", connect_to.mention())).await);
-//    } else {
-//        check_msg(msg.channel_id.say(&ctx.http, "Error joining the channel").await);
-//    }
-//
-//    Ok(())
-//}
-//
-//#[command]
-//#[only_in(guilds)]
-//async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-//    let guild = msg.guild(&ctx.cache).unwrap();
-//    let guild_id = guild.id;
-//
-//    let manager = songbird::get(ctx).await
-//        .expect("Songbird Voice client placed in at initialisation.").clone();
-//    let has_handler = manager.get(guild_id).is_some();
-//
-//    if has_handler {
-//        if let Err(e) = manager.remove(guild_id).await {
-//            check_msg(msg.channel_id.say(&ctx.http, format!("Failed: {:?}", e)).await);
-//        }
-//
-//        check_msg(msg.channel_id.say(&ctx.http,"Left voice channel").await);
-//    } else {
-//        check_msg(msg.reply(ctx, "Not in a voice channel").await);
-//    }
-//
-//    Ok(())
-//}
-//
-//#[command]
-//async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-//    check_msg(msg.channel_id.say(&ctx.http,"Pong!").await);
-//
-//    Ok(())
-//}
-//
-///// Checks that a message successfully sent; if not, then logs why to stdout.
-//fn check_msg(result: SerenityResult<Message>) {
-//    if let Err(why) = result {
-//        println!("Error sending message: {:?}", why);
-//    }
-//}

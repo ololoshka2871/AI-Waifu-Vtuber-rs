@@ -1,4 +1,4 @@
-use std::{ops::DerefMut, borrow::Cow};
+use std::{borrow::Cow, ops::DerefMut};
 
 use regex::Regex;
 use serenity::{
@@ -173,12 +173,13 @@ impl EventHandler for DiscordEventHandler {
 
         debug!("{}: {}", message.author.name, message.content);
 
-        self.send_req(Req::TextRequest(
-            message.id,
-            message.channel_id,
-            message.author,
-            message.content,
-        ))
+        self.send_req(Req::TextRequest {
+            guild_id: message.guild_id,
+            channel_id: message.channel_id,
+            msg_id: message.id,
+            user: message.author,
+            text: message.content,
+        })
         .await;
     }
 
@@ -201,18 +202,22 @@ impl EventHandler for DiscordEventHandler {
 
         // on enter channel
         if let Some(channel_id) = &new.channel_id {
+            let channel = Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await;
             debug!(
                 "{} joined voice channel {}",
                 Self::get_user_name_by_id(&ctx, new.user_id).await,
-                Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await
+                channel
             );
-
-            let channel = Self::get_chanel_name_by_id(&ctx, Some(*channel_id)).await;
 
             // check if channel is whitelisted
             if self.channel_whitelist.iter().any(|r| r.is_match(&channel)) {
                 if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
-                    self.send_req(Req::VoiceConnected(user, *channel_id)).await;
+                    self.send_req(Req::VoiceConnected {
+                        guild_id: new.guild_id,
+                        channel_id: *channel_id,
+                        user,
+                    })
+                    .await;
                 } else {
                     error!("Ignore voice connected request for unknown user");
                 }
@@ -220,16 +225,25 @@ impl EventHandler for DiscordEventHandler {
         }
 
         if let Some(before_id) = &old {
+            let channel = Self::get_chanel_name_by_id(&ctx, before_id.channel_id).await;
             debug!(
                 "{} leaved channel {}",
                 Self::get_user_name_by_id(&ctx, new.user_id).await,
                 Self::get_chanel_name_by_id(&ctx, before_id.channel_id).await
             );
-            if let Some(before_id) = before_id.channel_id {
-                if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
-                    self.send_req(Req::VoiceDisconnected(user, before_id)).await;
-                } else {
-                    error!("Ignore voice disconnected request for unknown user");
+            if let Some(before_ch_id) = before_id.channel_id {
+                // check if channel is whitelisted
+                if self.channel_whitelist.iter().any(|r| r.is_match(&channel)) {
+                    if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
+                        self.send_req(Req::VoiceDisconnected {
+                            guild_id: before_id.guild_id,
+                            channel_id: before_ch_id,
+                            user,
+                        })
+                        .await;
+                    } else {
+                        error!("Ignore voice disconnected request for unknown user");
+                    }
                 }
             }
         }
