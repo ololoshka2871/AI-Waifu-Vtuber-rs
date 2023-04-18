@@ -1,22 +1,24 @@
-use std::{borrow::Cow, ops::DerefMut};
+use std::{borrow::Cow, io::Cursor, ops::DerefMut, sync::Arc};
 
 use regex::RegexSet;
+use rodio::Source;
 use serenity::{
     async_trait,
     model::{
         channel::Message,
         id::{ChannelId, GuildId},
-        prelude::{MessageReference, Ready, UserId},
+        prelude::{MessageId, MessageReference, Ready, UserId, Guild},
         user::User,
         voice::VoiceState,
     },
     prelude::{Context, EventHandler, Mutex},
 };
 
+use songbird::{error::JoinError, input::Input, Call};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
-use crate::text_control::{TextRequest as Req, TextResponse as Resp};
+use crate::control::{DiscordRequest as Req, DiscordResponse as Resp};
 
 pub struct DiscordEventHandler {
     control_request_channel_tx: Sender<Req>,
@@ -96,9 +98,32 @@ impl DiscordEventHandler {
         }
     }
 
+    async fn get_guild_by_id(ctx: &Context, guild_id: GuildId) -> Guild {
+        if let Some(guild) = ctx.cache.guild(guild_id) {
+            guild
+        } else {
+            // guild not found in cache - get from discord
+            let _ = guild_id.to_partial_guild_with_counts(&ctx).await.expect("Failed to get guild");
+            ctx.cache.guild(guild_id).expect("Error update cache")
+        }
+    }
+
     async fn is_channel_allowed(&self, ctx: &Context, channel_id: &ChannelId) -> bool {
         let ch_name = Self::get_chanel_name_by_id(ctx, Some(*channel_id)).await;
         self.channel_whitelist.is_match(ch_name.as_str())
+    }
+
+    async fn join_voice_channel<C, G>(
+        ctx: &Context,
+        guild_id: G,
+        channel_id: C,
+    ) -> (Arc<Mutex<Call>>, Result<(), JoinError>)
+    where
+        C: Into<ChannelId>,
+        G: Into<GuildId>,
+    {
+        let manager = songbird::get(ctx).await.unwrap().clone();
+        manager.join(guild_id.into(), channel_id.into()).await
     }
 }
 
@@ -120,23 +145,25 @@ impl EventHandler for DiscordEventHandler {
             info!("Cache ready");
 
             tokio::spawn(async move {
-                while let Some(resp) = rx.recv().await {
-                    if let Err(e) = resp
-                        .channel_id
+                async fn send_text_message(
+                    ctx: &Context,
+                    channel_id: ChannelId,
+                    msg_id: Option<MessageId>,
+                    text: String,
+                    tts: Option<Cursor<bytes::Bytes>>,
+                ) {
+                    if let Err(e) = channel_id
                         .send_message(&ctx.http, |m| {
-                            m.content(resp.text);
-                            if let Some(msg_id) = resp.req_msg_id {
-                                m.reference_message(MessageReference::from((
-                                    resp.channel_id,
-                                    msg_id,
-                                )));
+                            m.content(text);
+                            if let Some(msg_id) = msg_id {
+                                m.reference_message(MessageReference::from((channel_id, msg_id)));
                             }
                             m.allowed_mentions(|am| {
                                 am.replied_user(false);
                                 am
                             });
 
-                            if let Some(tts_data) = resp.tts {
+                            if let Some(tts_data) = tts {
                                 m.add_file(serenity::model::prelude::AttachmentType::Bytes {
                                     data: Cow::Owned(tts_data.into_inner().to_vec()),
                                     filename: "TTS.wav".to_string(),
@@ -147,7 +174,68 @@ impl EventHandler for DiscordEventHandler {
                         })
                         .await
                     {
-                        error!("Failed to send message: {:?}", e);
+                        error!("Failed to send message: {e:?}");
+                    }
+                }
+
+                while let Some(resp) = rx.recv().await {
+                    match resp {
+                        Resp::TextResponse {
+                            req_msg_id,
+                            channel_id,
+                            text,
+                            tts,
+                        } => send_text_message(&ctx, channel_id, req_msg_id, text, tts).await,
+                        Resp::VoiceResponse {
+                            req_msg_id,
+                            guild_id,
+                            channel_id,
+                            text,
+                            tts,
+                        } => {
+                            // send text to text channel
+                            if let Some(text) = text {
+                                send_text_message(&ctx, channel_id, req_msg_id, text, None).await;
+                            }
+
+                            // join channel
+                            let (handler, join_result) =
+                                Self::join_voice_channel(&ctx, guild_id, channel_id).await;
+                            if let Err(e) = join_result {
+                                error!("Failed to join channel: {:?}", e);
+                                continue;
+                            }
+
+                            // prepare sound data
+                            let decoder = match rodio::Decoder::new_wav(tts) {
+                                Ok(decoder) => decoder,
+                                Err(e) => {
+                                    error!("Failed to decode wav: {:?}", e);
+                                    continue;
+                                }
+                            };
+                            let is_stereo = decoder.channels() > 1;
+
+                            // convert audiodata to vec of u8
+                            let audiobytes = decoder
+                                .into_iter()
+                                .map(|x| x.to_le_bytes())
+                                .flatten()
+                                .collect::<Vec<_>>();
+
+                            // play tts
+                            {
+                                let mut guard = handler.lock().await;
+
+                                guard.play_only_source(Input::new(
+                                    is_stereo,
+                                    songbird::input::Reader::from_memory(audiobytes),
+                                    songbird::input::Codec::Pcm,
+                                    songbird::input::Container::Raw,
+                                    None,
+                                ));
+                            }
+                        }
                     }
                 }
             });
@@ -207,6 +295,15 @@ impl EventHandler for DiscordEventHandler {
             // check if channel is whitelisted
             if self.is_channel_allowed(&ctx, channel_id).await {
                 if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
+                    // join channel
+                    if let Some(guild_id) = new.guild_id {
+                        let (_handler, join_result) =
+                            Self::join_voice_channel(&ctx, guild_id, channel_id).await;
+                        if let Err(e) = join_result {
+                            error!("Failed to join channel: {:?}", e);
+                        }
+                    }
+
                     self.send_req(Req::VoiceConnected {
                         guild_id: new.guild_id,
                         channel_id: *channel_id,
@@ -229,6 +326,30 @@ impl EventHandler for DiscordEventHandler {
                 // check if channel is whitelisted
                 if self.is_channel_allowed(&ctx, &before_ch_id).await {
                     if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
+                        // leave channel if no one is in it
+                        let manager = songbird::get(&ctx).await.unwrap().clone();
+                        if let Some(guild_id) = before_id.guild_id {
+                            let guild = Self::get_guild_by_id(&ctx, guild_id).await;
+
+                            // На одном сервере бот может быть только в 1 войс канале, поэтому 
+                            // получим канал где сейчас бот
+                            let mut states = guild.voice_states.values();
+                            
+                            // если в войсе есть кто-то помимо бота
+                            let bot_id = ctx.cache.current_user_id();
+                            let human_present = states.any(|vs| match vs.channel_id {
+                                Some(c_id) => before_ch_id == c_id && vs.user_id != bot_id,
+                                None => false,
+                            });
+
+                            if !human_present {
+                                // если в войсе нет никого помимо бота, то выйдем из канала
+                                if let Err(e) = manager.leave(guild_id).await {
+                                    error!("Failed to leave channel: {:?}", e);
+                                }
+                            }
+                        }
+
                         self.send_req(Req::VoiceDisconnected {
                             guild_id: before_id.guild_id,
                             channel_id: before_ch_id,

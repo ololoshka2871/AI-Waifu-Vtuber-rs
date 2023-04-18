@@ -1,6 +1,6 @@
+mod control;
 mod discord_ai_request;
 mod discord_event_handler;
-mod text_control;
 mod voice_ch_map;
 mod voice_receiver;
 
@@ -14,16 +14,16 @@ use tracing::{debug, error, info, warn};
 use ai_waifu::{
     chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
     config::Config as BotConfig,
-    dispatcher::{AIBuilder, Dispatcher},
+    dispatcher::{AIBuilder, AIError, Dispatcher},
     silerio_tts::SilerioTTS,
 };
+use control::{DiscordRequest, DiscordResponse};
 use discord_event_handler::DiscordEventHandler;
-use text_control::{TextRequest, TextResponse};
 
 async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
     mut dispatcher: Dispatcher<T>,
-    mut control_request_channel_rx: Receiver<TextRequest>,
-    text_responce_channel_tx: Sender<TextResponse>,
+    mut control_request_channel_rx: Receiver<DiscordRequest>,
+    text_responce_channel_tx: Sender<DiscordResponse>,
     tts_character: Option<String>,
     tts: SilerioTTS,
     busy_messages_generator: F,
@@ -34,7 +34,7 @@ async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
 
     while let Some(req) = control_request_channel_rx.recv().await {
         match req {
-            TextRequest::TextRequest {
+            DiscordRequest::TextRequest {
                 guild_id,
                 channel_id,
                 msg_id,
@@ -63,43 +63,72 @@ async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
                             }
                         };
 
-                        let text_resp = TextResponse {
-                            req_msg_id: Some(msg_id),
-                            channel_id: channel_id,
-                            text: resp.clone(),
-                            tts: if giuld_ch_user_map.get_voice_state(guild_id, channel_id)
-                                == State::TextOnly
-                            {
-                                tts_data
-                            } else {
-                                None
-                            },
+                        let resp = if giuld_ch_user_map.get_voice_state(guild_id, channel_id)
+                            == State::Voice
+                            && tts_data.is_some()
+                        {
+                            // Если бот в голосовом канале, то читать сообщени вслух, а отправлять тектс без вложения
+
+                            DiscordResponse::VoiceResponse {
+                                req_msg_id: Some(msg_id),
+                                guild_id: guild_id,
+                                channel_id: channel_id,
+                                text: Some(resp.clone()),
+                                tts: tts_data.unwrap(),
+                            }
+                        } else {
+                            // бот не в голосовом канале, сообщение + вложение
+
+                            DiscordResponse::TextResponse {
+                                req_msg_id: Some(msg_id),
+                                channel_id: channel_id,
+                                text: resp.clone(),
+                                tts: tts_data,
+                            }
                         };
 
-                        match text_responce_channel_tx.send(text_resp).await {
-                            Ok(_) => {
-                                debug!("Response: {}", resp)
-                            }
-                            Err(err) => {
-                                error!("Error send discord responce: {:?}", err);
-                            }
+                        if let Err(err) = text_responce_channel_tx.send(resp).await {
+                            error!("Error send discord responce: {:?}", err);
                         }
                     }
-                    Err(ai_waifu::dispatcher::AIError::Busy) => {
-                        let text_resp = TextResponse {
-                            req_msg_id: Some(msg_id),
-                            channel_id: channel_id,
-                            text: busy_messages_generator(),
-                            tts: None,
+                    Err(AIError::Busy) => {
+                        let resp = if giuld_ch_user_map.get_voice_state(guild_id, channel_id)
+                            == State::Voice
+                        {
+                            // Если бот в голосовом канале, то возмутиться вслух, а текст не отправлять
+                            match tts
+                                .say(&busy_messages_generator(), tts_character.clone())
+                                .await
+                            {
+                                Ok(tts) => DiscordResponse::VoiceResponse {
+                                    req_msg_id: Some(msg_id),
+                                    guild_id: guild_id,
+                                    channel_id: channel_id,
+                                    text: None,
+                                    tts,
+                                },
+                                Err(err) => {
+                                    error!("TTS error: {:?}", err);
+                                    DiscordResponse::TextResponse {
+                                        req_msg_id: Some(msg_id),
+                                        channel_id: channel_id,
+                                        text: "TTS error!".to_string(),
+                                        tts: None,
+                                    }
+                                }
+                            }
+                        } else {
+                            // бот не в голосовом канале, сообщение без вложения
+                            DiscordResponse::TextResponse {
+                                req_msg_id: Some(msg_id),
+                                channel_id: channel_id,
+                                text: busy_messages_generator(),
+                                tts: None,
+                            }
                         };
 
-                        match text_responce_channel_tx.send(text_resp).await {
-                            Ok(_) => {
-                                debug!("Send busy message to channel {channel_id}")
-                            }
-                            Err(err) => {
-                                error!("Error send discord responce: {:?}", err);
-                            }
+                        if let Err(err) = text_responce_channel_tx.send(resp).await {
+                            error!("Error send discord responce: {:?}", err);
                         }
                     }
                     Err(err) => {
@@ -107,7 +136,7 @@ async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
                     }
                 }
             }
-            TextRequest::VoiceConnected {
+            DiscordRequest::VoiceConnected {
                 guild_id,
                 channel_id,
                 ..
@@ -119,7 +148,7 @@ async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
                     warn!("Not a guild event, ignore!");
                 }
             }
-            TextRequest::VoiceDisconnected {
+            DiscordRequest::VoiceDisconnected {
                 guild_id,
                 channel_id,
                 ..
@@ -146,10 +175,10 @@ async fn main() {
         | GatewayIntents::GUILD_VOICE_STATES;
 
     let (control_request_channel_tx, control_request_channel_rx) =
-        tokio::sync::mpsc::channel::<TextRequest>(1);
+        tokio::sync::mpsc::channel::<DiscordRequest>(1);
 
     let (text_responce_channel_tx, text_responce_channel_rx) =
-        tokio::sync::mpsc::channel::<TextResponse>(1);
+        tokio::sync::mpsc::channel::<DiscordResponse>(1);
 
     let dispatcher = Dispatcher::new(ChatGPTEnAIBuilder::from(&config));
 
@@ -188,10 +217,10 @@ async fn main() {
         .framework(framework)
         .register_songbird_from_config(songbird_config)
         .await
-        .expect("Err creating client");
+        .expect("Error creating bot");
 
     let _ = bot
         .start()
         .await
-        .map_err(|why| info!("Client ended: {:?}", why));
+        .map_err(|why| info!("Bot ended: {:?}", why));
 }
