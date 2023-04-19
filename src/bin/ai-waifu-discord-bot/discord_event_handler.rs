@@ -7,7 +7,7 @@ use serenity::{
     model::{
         channel::Message,
         id::{ChannelId, GuildId},
-        prelude::{MessageId, MessageReference, Ready, UserId, Guild},
+        prelude::{Guild, MessageId, MessageReference, Ready, UserId},
         user::User,
         voice::VoiceState,
     },
@@ -18,12 +18,18 @@ use songbird::{error::JoinError, input::Input, Call};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
-use crate::control::{DiscordRequest as Req, DiscordResponse as Resp};
+use crate::{
+    control::{DiscordRequest as Req, DiscordResponse as Resp},
+    voice_receiver::{create_voice_control_pair, VoiceEventListenerBuilder, VoiceProcessor},
+};
 
 pub struct DiscordEventHandler {
     control_request_channel_tx: Sender<Req>,
     channel_whitelist: RegexSet,
-    rx_channel: Mutex<Option<Receiver<Resp>>>,
+    text_responce_channel_rx: Mutex<Option<Receiver<Resp>>>,
+
+    voice_listener_builder: VoiceEventListenerBuilder,
+    voice_processor: Mutex<Option<VoiceProcessor>>,
 }
 
 impl DiscordEventHandler {
@@ -32,10 +38,15 @@ impl DiscordEventHandler {
         text_responce_channel_rx: Receiver<Resp>,
         channel_whitelist: Vec<String>,
     ) -> Self {
+        let (voice_listener_builder, voice_processor) = create_voice_control_pair();
+
         Self {
             control_request_channel_tx,
             channel_whitelist: RegexSet::new(channel_whitelist).unwrap(),
-            rx_channel: Mutex::new(Some(text_responce_channel_rx)),
+            text_responce_channel_rx: Mutex::new(Some(text_responce_channel_rx)),
+
+            voice_listener_builder,
+            voice_processor: Mutex::new(Some(voice_processor)),
         }
     }
 
@@ -103,7 +114,10 @@ impl DiscordEventHandler {
             guild
         } else {
             // guild not found in cache - get from discord
-            let _ = guild_id.to_partial_guild_with_counts(&ctx).await.expect("Failed to get guild");
+            let _ = guild_id
+                .to_partial_guild_with_counts(&ctx)
+                .await
+                .expect("Failed to get guild");
             ctx.cache.guild(guild_id).expect("Error update cache")
         }
     }
@@ -134,14 +148,14 @@ impl EventHandler for DiscordEventHandler {
     }
 
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        let rx = {
-            let mut guard = self.rx_channel.lock().await;
-            let mut rx: Option<Receiver<Resp>> = None;
+        let command_rx = {
+            let mut guard = self.text_responce_channel_rx.lock().await;
+            let mut rx = None;
             std::mem::swap(guard.deref_mut(), &mut rx);
             rx
         };
 
-        if let Some(mut rx) = rx {
+        if let Some(mut command_rx) = command_rx {
             info!("Cache ready");
 
             tokio::spawn(async move {
@@ -178,7 +192,7 @@ impl EventHandler for DiscordEventHandler {
                     }
                 }
 
-                while let Some(resp) = rx.recv().await {
+                while let Some(resp) = command_rx.recv().await {
                     match resp {
                         Resp::TextResponse {
                             req_msg_id,
@@ -240,7 +254,37 @@ impl EventHandler for DiscordEventHandler {
                 }
             });
         } else {
-            warn!("Double call cache_ready()");
+            warn!("Double command_rx ragistarion atempt");
+        }
+
+        let voice_processor = {
+            let mut guard = self.voice_processor.lock().await;
+            let mut p = None;
+            std::mem::swap(guard.deref_mut(), &mut p);
+            p
+        };
+
+        if let Some(mut voice_processor) = voice_processor {
+            tokio::spawn(async move {
+                loop {
+                    match voice_processor.try_get_user_voice().await {
+                        Ok(Some(voice_data)) => {
+                            debug!(
+                                "Voice data: from {} ({} samples)",
+                                voice_data.0,
+                                voice_data.1.len()
+                            );
+                        }
+                        Ok(None) => { /* nothing  */ }
+                        Err(_) => {
+                            error!("Break voice_processor");
+                            break;
+                        }
+                    }
+                }
+            });
+        } else {
+            warn!("Double voice_processor registarion atempt");
         }
     }
 
@@ -297,10 +341,27 @@ impl EventHandler for DiscordEventHandler {
                 if let Some(user) = Self::get_user_by_id(&ctx, new.user_id).await {
                     // join channel
                     if let Some(guild_id) = new.guild_id {
-                        let (_handler, join_result) =
+                        let (handler, join_result) =
                             Self::join_voice_channel(&ctx, guild_id, channel_id).await;
                         if let Err(e) = join_result {
                             error!("Failed to join channel: {:?}", e);
+                        } else {
+                            let mut handler = handler.lock().await;
+
+                            handler.add_global_event(
+                                songbird::Event::Core(songbird::CoreEvent::SpeakingStateUpdate),
+                                self.voice_listener_builder.build_state_update_listener(),
+                            );
+
+                            handler.add_global_event(
+                                songbird::Event::Core(songbird::CoreEvent::SpeakingUpdate),
+                                self.voice_listener_builder.build_speaking_update_listener(),
+                            );
+
+                            handler.add_global_event(
+                                songbird::Event::Core(songbird::CoreEvent::VoicePacket),
+                                self.voice_listener_builder.build_voice_packet_listener(),
+                            );
                         }
                     }
 
@@ -331,10 +392,10 @@ impl EventHandler for DiscordEventHandler {
                         if let Some(guild_id) = before_id.guild_id {
                             let guild = Self::get_guild_by_id(&ctx, guild_id).await;
 
-                            // На одном сервере бот может быть только в 1 войс канале, поэтому 
+                            // На одном сервере бот может быть только в 1 войс канале, поэтому
                             // получим канал где сейчас бот
                             let mut states = guild.voice_states.values();
-                            
+
                             // если в войсе есть кто-то помимо бота
                             let bot_id = ctx.cache.current_user_id();
                             let human_present = states.any(|vs| match vs.channel_id {
@@ -344,7 +405,11 @@ impl EventHandler for DiscordEventHandler {
 
                             if !human_present {
                                 // если в войсе нет никого помимо бота, то выйдем из канала
-                                if let Err(e) = manager.leave(guild_id).await {
+                                let guild = manager.get(guild_id).unwrap();
+                                let mut lock = guild.lock().await;
+
+                                lock.remove_all_global_events();
+                                if let Err(e) = lock.leave().await {
                                     error!("Failed to leave channel: {:?}", e);
                                 }
                             }
