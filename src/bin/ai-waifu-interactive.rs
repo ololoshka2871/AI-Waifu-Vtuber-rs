@@ -1,7 +1,14 @@
-use rodio::{decoder::Decoder, OutputStream, Sink};
-use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::{
+    io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
+    sync::mpsc::{Receiver, Sender},
+};
 
-use cpal::traits::{DeviceTrait, HostTrait};
+use rodio::{decoder::Decoder, OutputStream, Sink};
+
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Device,
+};
 
 use clap::Parser;
 
@@ -13,7 +20,7 @@ use ai_waifu::{
     silerio_tts::SilerioTTS,
 };
 
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 struct InteractiveRequest {
     request: String,
@@ -71,6 +78,49 @@ fn display_audio_devices(host: &cpal::Host) {
     }
 }
 
+fn spawn_audio_input(ain: Device, audio_req_tx: Sender<String>) -> Result<(), String> {
+    let config = ain.default_input_config().map_err(|e| format!("{e}"))?;
+    let sample_rate = config.sample_rate().0;
+    let channels = config.channels();
+
+    let stream = ain
+        .build_input_stream(
+            &config.into(),
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                let mut up_detected = false;
+                // Обработка аудио-данных
+                for &sample in data {
+                    // Выделение фрагментов, отличных от тишины
+                    if sample.abs() > 0.1 && !up_detected {
+                        warn!("up_detected");
+                        up_detected = true;
+                    } else if sample.abs() < 0.05 && up_detected {
+                        warn!("down_detected");
+                        up_detected = false;
+                    }
+                }
+            },
+            |err| {
+                // Обработка ошибок
+                eprintln!("An error occurred on the input stream: {}", err);
+            },
+            None,
+        )
+        .map_err(|e| format!("{e}"))?;
+
+    stream.play().map_err(|e| format!("{e}"))?;
+
+    Ok(())
+}
+
+async fn get_voice_request<T>(rx_channel: &mut Receiver<T>) -> String {
+    loop {
+        if let Some(_s) = rx_channel.recv().await {
+            return "".to_string();
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -121,27 +171,56 @@ async fn main() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut reader = BufReader::new(stdin);
-    let mut buffer = String::new();
 
     let tts = SilerioTTS::new(config.tts_service_url);
+
+    let mut audio_request_channel = if let Some(ain) = audio_in {
+        let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
+        if let Err(e) = spawn_audio_input(ain, audio_req_tx) {
+            error!("Failed to init audio input: {}", e);
+            None
+        } else {
+            Some(audio_req_rx)
+        }
+    } else {
+        None
+    };
 
     loop {
         // prompt
         stdout.write("> ".as_bytes()).await.unwrap();
         stdout.flush().await.unwrap();
 
-        // read a line
-        let size = reader.read_line(&mut buffer).await.unwrap();
+        let (req, result) = if let Some(audio_request_channel) = &mut audio_request_channel {
+            let mut buffer = String::new();
+            tokio::select! {
+                result = reader.read_line(&mut buffer) => {
+                    (buffer.trim().to_owned(), result)
+                }
+                req = get_voice_request(audio_request_channel) => {
+                    let len = req.len();
+                    stdout.write(req.as_bytes()).await.unwrap();
+                    stdout.write(b"\n").await.unwrap();
+                    (req, Ok(len))
+                }
+            }
+        } else {
+            let mut buffer = String::new();
+            let res = reader.read_line(&mut buffer).await;
+            (buffer.trim().to_owned(), res)
+        };
 
         // check if the line is empty
-        if size == 0 {
+        if result.is_err() || unsafe { result.unwrap_unchecked() == 0 } {
             continue;
         }
 
+        if req == "STOP" {
+            break;
+        }
+
         let res = dispatcher
-            .try_process_request(Box::new(InteractiveRequest {
-                request: buffer.trim().to_string(),
-            }))
+            .try_process_request(Box::new(InteractiveRequest { request: req }))
             .await
             .unwrap();
 
@@ -180,8 +259,5 @@ async fn main() {
             .write(format!("< {}\n", res).as_bytes())
             .await
             .unwrap();
-
-        // clear buffer
-        buffer.clear();
     }
 }

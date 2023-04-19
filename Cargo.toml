@@ -35,6 +35,7 @@ cpal = "0.15"
 clap = "4.2"
 hound = "3.5"
 
+
 [lib]
 name = "ai_waifu"
 
