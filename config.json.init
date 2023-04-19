@@ -13,5 +13,6 @@
     "Busy_messages": [
         "I'm busy, please wait",
         "Wait please, i'm thinking!"
-    ]
+    ],
+    "Voice2txt_Url": "http://localhost:3154/recognize"
 }

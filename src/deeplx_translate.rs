@@ -1,3 +1,6 @@
+/// Use DeepLx service to translate text
+/// start docker container https://hub.docker.com/r/missuo/deeplx adn add it to config as "DeepLx_Service_Url"
+
 use async_trait::async_trait;
 
 use reqwest::{self, IntoUrl, Url};

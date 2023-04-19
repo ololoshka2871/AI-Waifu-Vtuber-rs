@@ -1,6 +1,8 @@
 use std::{borrow::Cow, io::Cursor, ops::DerefMut, sync::Arc};
 
+use ai_waifu::urukhan_voice_recognize::UrukHanVoice2Txt;
 use regex::RegexSet;
+use reqwest::Url;
 use rodio::Source;
 use serenity::{
     async_trait,
@@ -30,6 +32,8 @@ pub struct DiscordEventHandler {
 
     voice_listener_builder: VoiceEventListenerBuilder,
     voice_processor: Mutex<Option<VoiceProcessor>>,
+
+    voice2txt_url: Url,
 }
 
 impl DiscordEventHandler {
@@ -37,6 +41,7 @@ impl DiscordEventHandler {
         control_request_channel_tx: Sender<Req>,
         text_responce_channel_rx: Receiver<Resp>,
         channel_whitelist: Vec<String>,
+        voice2txt_url: Url,
     ) -> Self {
         let (voice_listener_builder, voice_processor) = create_voice_control_pair();
 
@@ -47,6 +52,8 @@ impl DiscordEventHandler {
 
             voice_listener_builder,
             voice_processor: Mutex::new(Some(voice_processor)),
+
+            voice2txt_url,
         }
     }
 
@@ -265,7 +272,34 @@ impl EventHandler for DiscordEventHandler {
         };
 
         if let Some(mut voice_processor) = voice_processor {
+            let voice2txt_url = self.voice2txt_url.clone();
+
             tokio::spawn(async move {
+                fn voice_data_to_wav_buf(voice_data: Vec<i16>) -> Result<Vec<u8>, hound::Error> {
+                    let mut result = Vec::with_capacity(voice_data.len() * 2);
+                    let coursor = Cursor::new(&mut result);
+
+                    let mut writer = hound::WavWriter::new(
+                        coursor,
+                        hound::WavSpec {
+                            channels: 2,
+                            sample_rate: 48000,
+                            bits_per_sample: 16,
+                            sample_format: hound::SampleFormat::Int,
+                        },
+                    )?;
+
+                    for sample in voice_data {
+                        writer.write_sample(sample)?;
+                    }
+
+                    writer.finalize()?;
+
+                    Ok(result)
+                }
+
+                let voice2txt = UrukHanVoice2Txt::new(voice2txt_url);
+
                 loop {
                     match voice_processor.try_get_user_voice().await {
                         Ok(Some((user_id, voice_data))) => {
@@ -275,31 +309,22 @@ impl EventHandler for DiscordEventHandler {
                                 voice_data.len()
                             );
 
-                            if false {
-                                // save voice data to wav file
-                                let now = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs();
-
-                                // encode voice data to wav
-                                let mut writer = hound::WavWriter::create(
-                                    format!("{user_id}-{now}-voice.wav"),
-                                    hound::WavSpec {
-                                        channels: 2,
-                                        sample_rate: 48000,
-                                        bits_per_sample: 16,
-                                        sample_format: hound::SampleFormat::Int,
+                            let voice2txt = voice2txt.clone();
+                            tokio::spawn(async move {
+                                match voice_data_to_wav_buf(voice_data) {
+                                    Ok(wav_data) => match voice2txt.recognize(wav_data).await {
+                                        Ok(text) => {
+                                            info!("User {} said: {}", user_id, text);
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to convert voice to text: {:?}", e);
+                                        }
                                     },
-                                )
-                                .unwrap();
-
-                                voice_data
-                                    .into_iter()
-                                    .for_each(|sample| writer.write_sample(sample).unwrap());
-
-                                writer.finalize().unwrap();
-                            }
+                                    Err(e) => {
+                                        error!("Failed to encode voice data to wav: {:?}", e);
+                                    }
+                                }
+                            });
                         }
                         Ok(None) => { /* nothing  */ }
                         Err(_) => {

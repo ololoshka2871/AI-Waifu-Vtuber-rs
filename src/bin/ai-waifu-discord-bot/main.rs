@@ -213,6 +213,7 @@ async fn main() {
             control_request_channel_tx,
             text_responce_channel_rx,
             config.channel_whitelist,
+            config.voice2txt_url,
         ))
         .framework(framework)
         .register_songbird_from_config(songbird_config)
