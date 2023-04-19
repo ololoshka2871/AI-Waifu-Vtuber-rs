@@ -268,12 +268,38 @@ impl EventHandler for DiscordEventHandler {
             tokio::spawn(async move {
                 loop {
                     match voice_processor.try_get_user_voice().await {
-                        Ok(Some(voice_data)) => {
+                        Ok(Some((user_id, voice_data))) => {
                             debug!(
                                 "Voice data: from {} ({} samples)",
-                                voice_data.0,
-                                voice_data.1.len()
+                                user_id,
+                                voice_data.len()
                             );
+
+                            if false {
+                                // save voice data to wav file
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs();
+
+                                // encode voice data to wav
+                                let mut writer = hound::WavWriter::create(
+                                    format!("{user_id}-{now}-voice.wav"),
+                                    hound::WavSpec {
+                                        channels: 2,
+                                        sample_rate: 48000,
+                                        bits_per_sample: 16,
+                                        sample_format: hound::SampleFormat::Int,
+                                    },
+                                )
+                                .unwrap();
+
+                                voice_data
+                                    .into_iter()
+                                    .for_each(|sample| writer.write_sample(sample).unwrap());
+
+                                writer.finalize().unwrap();
+                            }
                         }
                         Ok(None) => { /* nothing  */ }
                         Err(_) => {

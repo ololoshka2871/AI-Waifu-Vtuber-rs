@@ -33,6 +33,7 @@ rodio = { version = "0.17", default-features = false, features = ["wav"] }
 bytes = "1.0"
 cpal = "0.15"
 clap = "4.2"
+hound = "3.5"
 
 [lib]
 name = "ai_waifu"

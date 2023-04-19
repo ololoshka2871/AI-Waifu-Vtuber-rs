@@ -176,7 +176,9 @@ impl VoiceProcessor {
                     } else {
                         // stop recording and return the recorded data
                         if let Some(res) = self.storage.remove(&ssrc) {
-                            return Ok(Some((self.user_ssrc_map[&ssrc], res)));
+                            if res.len() > 4096 {
+                                return Ok(Some((self.user_ssrc_map[&ssrc], res)));
+                            }
                         }
                     }
                 }
