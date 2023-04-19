@@ -7,7 +7,7 @@ use rodio::{decoder::Decoder, OutputStream, Sink};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device,
+    Device, Stream,
 };
 
 use clap::Parser;
@@ -61,7 +61,7 @@ fn display_audio_devices(host: &cpal::Host) {
         if let Ok(name) = device.name() {
             if let Ok(oc) = device.supported_output_configs() {
                 if oc.count() > 0 {
-                    print!("Audio Out: {}", &name);
+                    println!("Audio Out: {}", &name);
                 }
             }
         }
@@ -71,14 +71,14 @@ fn display_audio_devices(host: &cpal::Host) {
         if let Ok(name) = device.name() {
             if let Ok(ic) = device.supported_input_configs() {
                 if ic.count() > 0 {
-                    print!("Audio In: {}", &name);
+                    println!("Audio In: {}", &name);
                 }
             }
         }
     }
 }
 
-fn spawn_audio_input(ain: Device, audio_req_tx: Sender<String>) -> Result<(), String> {
+fn spawn_audio_input(ain: Device, audio_req_tx: Sender<String>) -> Result<Stream, String> {
     let config = ain.default_input_config().map_err(|e| format!("{e}"))?;
     let sample_rate = config.sample_rate().0;
     let channels = config.channels();
@@ -110,7 +110,7 @@ fn spawn_audio_input(ain: Device, audio_req_tx: Sender<String>) -> Result<(), St
 
     stream.play().map_err(|e| format!("{e}"))?;
 
-    Ok(())
+    Ok(stream)
 }
 
 async fn get_voice_request<T>(rx_channel: &mut Receiver<T>) -> String {
@@ -174,13 +174,14 @@ async fn main() {
 
     let tts = SilerioTTS::new(config.tts_service_url);
 
-    let mut audio_request_channel = if let Some(ain) = audio_in {
+    let mut audio_request_ctrl = if let Some(ain) = audio_in {
         let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
-        if let Err(e) = spawn_audio_input(ain, audio_req_tx) {
-            error!("Failed to init audio input: {}", e);
-            None
-        } else {
-            Some(audio_req_rx)
+        match spawn_audio_input(ain, audio_req_tx) {
+            Ok(stream) => Some((audio_req_rx, stream)),
+            Err(e) => {
+                error!("Failed to init audio input: {}", e);
+                None
+            }
         }
     } else {
         None
@@ -191,13 +192,13 @@ async fn main() {
         stdout.write("> ".as_bytes()).await.unwrap();
         stdout.flush().await.unwrap();
 
-        let (req, result) = if let Some(audio_request_channel) = &mut audio_request_channel {
+        let (req, result) = if let Some(audio_request_channel) = &mut audio_request_ctrl {
             let mut buffer = String::new();
             tokio::select! {
                 result = reader.read_line(&mut buffer) => {
                     (buffer.trim().to_owned(), result)
                 }
-                req = get_voice_request(audio_request_channel) => {
+                req = get_voice_request(&mut audio_request_channel.0) => {
                     let len = req.len();
                     stdout.write(req.as_bytes()).await.unwrap();
                     stdout.write(b"\n").await.unwrap();
