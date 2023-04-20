@@ -275,29 +275,6 @@ impl EventHandler for DiscordEventHandler {
             let voice2txt_url = self.voice2txt_url.clone();
 
             tokio::spawn(async move {
-                fn voice_data_to_wav_buf(voice_data: Vec<i16>) -> Result<Vec<u8>, hound::Error> {
-                    let mut result = Vec::with_capacity(voice_data.len() * 2);
-                    let coursor = Cursor::new(&mut result);
-
-                    let mut writer = hound::WavWriter::new(
-                        coursor,
-                        hound::WavSpec {
-                            channels: 2,
-                            sample_rate: 48000,
-                            bits_per_sample: 16,
-                            sample_format: hound::SampleFormat::Int,
-                        },
-                    )?;
-
-                    for sample in voice_data {
-                        writer.write_sample(sample)?;
-                    }
-
-                    writer.finalize()?;
-
-                    Ok(result)
-                }
-
                 let voice2txt = UrukHanVoice2Txt::new(voice2txt_url);
 
                 loop {
@@ -311,7 +288,7 @@ impl EventHandler for DiscordEventHandler {
 
                             let voice2txt = voice2txt.clone();
                             tokio::spawn(async move {
-                                match voice_data_to_wav_buf(voice_data) {
+                                match ai_waifu::audio_halpers::voice_data_to_wav_buf(voice_data, 2, 48000) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {
                                         Ok(text) => {
                                             info!("User {} said: {}", user_id, text);

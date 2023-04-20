@@ -9,3 +9,4 @@ pub mod dummy_ai;
 pub mod google_translator;
 pub mod silerio_tts;
 pub mod urukhan_voice_recognize;
+pub mod audio_halpers;

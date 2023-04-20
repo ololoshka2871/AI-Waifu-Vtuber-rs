@@ -124,7 +124,14 @@ async fn main() {
 
     let mut audio_request_ctrl = if let Some(ain) = audio_in {
         let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
-        match spawn_audio_input(ain, audio_req_tx, args.noise_gate, args.release_time) {
+        match spawn_audio_input(
+            ain,
+            audio_req_tx,
+            args.noise_gate,
+            args.release_time,
+            config.voice2txt_url,
+            tokio::runtime::Handle::current(),
+        ) {
             Ok(stream) => Some((audio_req_rx, stream)),
             Err(e) => {
                 error!("Failed to init audio input: {}", e);
