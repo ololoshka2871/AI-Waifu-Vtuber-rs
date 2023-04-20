@@ -288,7 +288,7 @@ impl EventHandler for DiscordEventHandler {
 
                             let voice2txt = voice2txt.clone();
                             tokio::spawn(async move {
-                                match ai_waifu::audio_halpers::voice_data_to_wav_buf(voice_data, 2, 48000) {
+                                match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(voice_data, 2, 48000) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {
                                         Ok(text) => {
                                             info!("User {} said: {}", user_id, text);

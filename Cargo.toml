@@ -5,14 +5,23 @@ authors = ["Lolka_097"]
 edition = "2021"
 
 [dependencies]
+# common
 google_translator="0.2.2"
 serde = "^1.0"
 serde_json = "^1.0"
-
+regex = "1.7"
+reqwest = "0.11"
+maplit = "1"
+bytes = "1.0"
+clap = "4.2"
 rand = "0.8"
+
+# tracing
 tracing = "0.1"
 tracing-subscriber = "0.2"
 tracing-futures = "0.2"
+
+# discord
 songbird = { version = "0.3.2" }
 serenity = { version = "0.11", features = [
     "cache",
@@ -23,19 +32,21 @@ serenity = { version = "0.11", features = [
     "http",
     "utils",
     "rustls_backend"] }
+
+# async
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 async-trait = "0.1"
+
+# chatGPT
 chatgpt_rs = { version = "1.1.1" }
-regex = "1.7"
-reqwest = "0.11"
-maplit = "1"
+
+# Audio
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
-bytes = "1.0"
 cpal = "0.15"
-clap = "4.2"
 hound = "3.5"
 noise-gate = { git = "https://github.com/Michael-F-Bryan/noise-gate.git" }
 dasp = "0.11.0"
+dagc = "0.1.0"
 
 
 [lib]

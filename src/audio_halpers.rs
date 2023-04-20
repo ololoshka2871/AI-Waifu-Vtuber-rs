@@ -3,16 +3,15 @@ use std::io::Cursor;
 use dasp::sample::ToSample;
 use hound::{Error, SampleFormat, WavSpec, WavWriter};
 
-pub fn voice_data_to_wav_buf<T>(
+pub fn voice_data_to_wav_buf_gain<T>(
     voice_data: Vec<T>,
     channels: u16,
     sample_rate: u32,
 ) -> Result<Vec<u8>, Error>
 where
-    T: cpal::Sample,
-    T: ToSample<i16>,
+    T: cpal::Sample + ToSample<f32> + ToSample<i16>,
 {
-    let mut result = Vec::with_capacity(voice_data.len() * 2);
+    let mut result = Vec::new();
     let coursor = Cursor::new(&mut result);
 
     let mut writer = WavWriter::new(
@@ -25,9 +24,17 @@ where
         },
     )?;
 
-    for sample in voice_data {
-        writer.write_sample(sample.to_sample::<i16>())?;
-    }
+    //let mut voice_data = voice_data
+    //    .into_iter()
+    //    .map(|x| x.to_sample::<f32>())
+    //    .collect::<Vec<_>>();
+    //
+    //let mut dagc = dagc::MonoAgc::new(0.001, 0.0001).expect("unreachable");
+    //dagc.process(&mut voice_data);
+
+    voice_data.into_iter().for_each(|x| {
+        writer.write_sample(cpal::Sample::to_sample::<i16>(x)).unwrap();
+    });
 
     writer.finalize()?;
 

@@ -1,17 +1,12 @@
-use std::{
-    fs::File,
-    io::{BufWriter, Cursor},
-};
-
 use ai_waifu::urukhan_voice_recognize::UrukHanVoice2Txt;
-use cpal::{traits::StreamTrait, Device, Sample, Stream};
+use cpal::{traits::StreamTrait, Device, Stream};
 
-use hound::{WavSpec, WavWriter};
+use hound::WavSpec;
 
 use dasp::Frame;
 
 use reqwest::Url;
-use rodio::{buffer, DeviceTrait};
+use rodio::DeviceTrait;
 use tokio::{
     runtime::Handle,
     sync::mpsc::{Receiver, Sender},
@@ -19,19 +14,7 @@ use tokio::{
 
 use noise_gate::NoiseGate;
 
-use tracing::{debug, error, info, warn};
-
-//struct WaveBuffer(Vec<u8>);
-//
-//impl WaveBuffer {
-//    fn new() -> Self {
-//        WaveBuffer(Vec::new())
-//    }
-//
-//    fn make_coursor(&mut self) -> Cursor<&mut [u8]> {
-//        Cursor::new(&mut self.0)
-//    }
-//}
+use tracing::error;
 
 /// A sink which sends audiodata to spech recognition.
 pub struct Sink {
@@ -40,7 +23,6 @@ pub struct Sink {
     audio_req_tx: Sender<String>,
 
     current_buffer: Option<Vec<f32>>,
-    fragment_wrier: Option<WavWriter<Cursor<Vec<u8>>>>,
     tokio_handle: Handle,
 }
 
@@ -56,7 +38,6 @@ impl Sink {
             audio_req_tx,
             spec,
             current_buffer: None,
-            fragment_wrier: None,
             tokio_handle,
         }
     }
@@ -73,7 +54,6 @@ impl Sink {
 impl<F> noise_gate::Sink<F> for Sink
 where
     F: Frame<Sample = f32>,
-    //F::Sample: f32,
 {
     fn record(&mut self, frame: F) {
         let current_fragment = self.get_fragment_buffer();
@@ -81,19 +61,26 @@ where
     }
 
     fn end_of_transmission(&mut self) {
-        if let Some(buf) = self.current_buffer.take() {
+        if let Some(buf) = std::mem::replace(&mut self.current_buffer, None) {
             // ready
             let voice2txt_url = self.voice2txt_url.clone();
             let channels = self.spec.channels;
             let sample_rate = self.spec.sample_rate;
+            let audio_req_tx = self.audio_req_tx.clone();
 
             self.tokio_handle.spawn(async move {
-                match ai_waifu::audio_halpers::voice_data_to_wav_buf(buf, channels, sample_rate) {
+                match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(
+                    buf,
+                    channels,
+                    sample_rate,
+                ) {
                     Ok(wav_data) => {
                         let voice2txt = UrukHanVoice2Txt::new(voice2txt_url);
                         match voice2txt.recognize(wav_data).await {
                             Ok(text) => {
-                                debug!("Said: {}", text);
+                                if let Err(e) = audio_req_tx.send(text).await {
+                                    error!("Failed to send voice request: {:?}", e)
+                                }
                             }
                             Err(e) => {
                                 error!("Failed to convert voice to text: {:?}", e);
@@ -136,6 +123,7 @@ pub fn spawn_audio_input(
         tokio_handle,
     );
     let mut noise_gate = NoiseGate::new(noise_gate, release_time as usize);
+    let mut dagc = dagc::MonoAgc::new(0.001, 0.0001).expect("unreachable");
 
     let stream = ain
         .build_input_stream(
@@ -144,8 +132,9 @@ pub fn spawn_audio_input(
                 // mono signal
                 let mut frames = data
                     .chunks(channels as usize)
-                    .map(|chank| [chank[0]])
+                    .map(|chank| chank[0])
                     .collect::<Vec<_>>();
+                dagc.process(&mut frames);
                 noise_gate.process_frames(&mut frames, &mut sink);
             },
             |err| {
@@ -160,10 +149,10 @@ pub fn spawn_audio_input(
     Ok(stream)
 }
 
-pub async fn get_voice_request<T>(rx_channel: &mut Receiver<T>) -> String {
+pub async fn get_voice_request(rx_channel: &mut Receiver<String>) -> String {
     loop {
-        if let Some(_s) = rx_channel.recv().await {
-            return "".to_string();
+        if let Some(s) = rx_channel.recv().await {
+            return s
         }
     }
 }
