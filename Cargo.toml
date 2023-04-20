@@ -1,6 +1,6 @@
 [package]
 name = "ai-waifu-bot"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Lolka_097"]
 edition = "2021"
 
@@ -34,6 +34,8 @@ bytes = "1.0"
 cpal = "0.15"
 clap = "4.2"
 hound = "3.5"
+noise-gate = { git = "https://github.com/Michael-F-Bryan/noise-gate.git" }
+dasp = "0.11.0"
 
 
 [lib]

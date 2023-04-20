@@ -1,40 +1,24 @@
-use tokio::{
-    io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
-    sync::mpsc::{Receiver, Sender},
-};
+mod audio_input;
+mod interactive_request;
+
+use audio_input::spawn_audio_input;
+use interactive_request::InteractiveRequest;
+use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use rodio::{decoder::Decoder, OutputStream, Sink};
 
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device, Stream,
-};
+use cpal::traits::{DeviceTrait, HostTrait};
 
 use clap::Parser;
 
 use ai_waifu::{
-    audio_dev::get_audio_device_by_name,
-    chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
-    config::Config,
-    dispatcher::{AIRequest, Dispatcher},
-    silerio_tts::SilerioTTS,
+    audio_dev::get_audio_device_by_name, chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
+    config::Config, dispatcher::Dispatcher, silerio_tts::SilerioTTS,
 };
 
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
-struct InteractiveRequest {
-    request: String,
-}
-
-impl AIRequest for InteractiveRequest {
-    fn request(&self) -> String {
-        self.request.clone()
-    }
-
-    fn channel(&self) -> String {
-        "interactive".to_string()
-    }
-}
+use crate::audio_input::get_voice_request;
 
 /// Ai Waifu interactive mode
 #[derive(Parser)]
@@ -53,6 +37,13 @@ struct Cli {
     /// Audio output device name
     #[clap(short, long)]
     Out: Option<String>,
+
+    /// Audio noise_gate, 0.0 - 1.0
+    #[clap(short, long, default_value_t = 0.1)]
+    noise_gate: f32,
+    /// Audio release_time, s
+    #[clap(short, long, default_value_t = 1.0)]
+    release_time: f32,
 }
 
 /// print all available devices
@@ -74,49 +65,6 @@ fn display_audio_devices(host: &cpal::Host) {
                     println!("Audio In: {}", &name);
                 }
             }
-        }
-    }
-}
-
-fn spawn_audio_input(ain: Device, audio_req_tx: Sender<String>) -> Result<Stream, String> {
-    let config = ain.default_input_config().map_err(|e| format!("{e}"))?;
-    let sample_rate = config.sample_rate().0;
-    let channels = config.channels();
-
-    let stream = ain
-        .build_input_stream(
-            &config.into(),
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                let mut up_detected = false;
-                // Обработка аудио-данных
-                for &sample in data {
-                    // Выделение фрагментов, отличных от тишины
-                    if sample.abs() > 0.1 && !up_detected {
-                        warn!("up_detected");
-                        up_detected = true;
-                    } else if sample.abs() < 0.05 && up_detected {
-                        warn!("down_detected");
-                        up_detected = false;
-                    }
-                }
-            },
-            |err| {
-                // Обработка ошибок
-                eprintln!("An error occurred on the input stream: {}", err);
-            },
-            None,
-        )
-        .map_err(|e| format!("{e}"))?;
-
-    stream.play().map_err(|e| format!("{e}"))?;
-
-    Ok(stream)
-}
-
-async fn get_voice_request<T>(rx_channel: &mut Receiver<T>) -> String {
-    loop {
-        if let Some(_s) = rx_channel.recv().await {
-            return "".to_string();
         }
     }
 }
@@ -176,7 +124,7 @@ async fn main() {
 
     let mut audio_request_ctrl = if let Some(ain) = audio_in {
         let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
-        match spawn_audio_input(ain, audio_req_tx) {
+        match spawn_audio_input(ain, audio_req_tx, args.noise_gate, args.release_time) {
             Ok(stream) => Some((audio_req_rx, stream)),
             Err(e) => {
                 error!("Failed to init audio input: {}", e);
