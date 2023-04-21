@@ -174,11 +174,11 @@ impl DeepLxTranslatorOwned {
             .await
             .map_err(|e| e.to_string())?;
 
-        // Ok resp
+        // Ok resp:
         //  Object {"id": Number(8373055001), "jsonrpc": String("2.0"), "result": Object {"detectedLanguages": Object {}, "lang": String("EN"), "lang_is_confident": Bool(false), "texts": Array [Object {"alternatives": Array [], "text": String("Hi")}]}}
-        // unknown language:
+        // Unknown language:
         //  Object {"id": Number(8375246001), "jsonrpc": String("2.0"), "result": Object {"detectedLanguages": Object {"BG": Number(0.130183), "CS": Number(0.000067), "DA": Number(0.000018), "DE": Number(0.000025), "EL": Number(0.000014), "EN": Number(0.000028), "ES": Number(0.00003), "ET": Number(0.000371), "FI": Number(0.000025), "FR": Number(0.000029), "HU": Number(0.000217), "ID": Number(0.000018), "IT": Number(0.000033), "JA": Number(0.000035), "KO": Number(0.000019), "LT": Number(0.000047), "LV": Number(0.000204), "NB": Number(0.000019), "NL": Number(0.000019), "PL": Number(0.000039), "PT": Number(0.000084), "RO": Number(0.000108), "RU": Number(0.160944), "SK": Number(0.000045), "SL": Number(0.00023), "SV": Number(0.000023), "TR": Number(0.000011), "UK": Number(0.165217), "ZH": Number(0.000155), "unsupported": Number(0.541743)}, "lang": String("UK"), "lang_is_confident": Bool(false), "texts": Array [Object {"alternatives": Array [Object {"text": String("Goodbye.")}], "text": String("Bye.")}]}}
-        // error
+        // Error:
         //  Object {"error": Object {"code": Number(1042911), "message": String("Too many requests")}, "jsonrpc": String("2.0")}
 
         trace!("Translate responce: {}", resp);
