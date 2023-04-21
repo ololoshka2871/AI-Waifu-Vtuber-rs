@@ -83,13 +83,21 @@ async fn main() {
     }
 
     let audio_in = if let Some(in_d) = args.In {
-        get_audio_device_by_name(&ht, &in_d, true)
+        if in_d == "none" {
+            None
+        } else {
+            get_audio_device_by_name(&ht, &in_d, true)
+        }
     } else {
         ht.default_input_device()
     };
 
     let audio_out = if let Some(out_d) = args.Out {
-        get_audio_device_by_name(&ht, &out_d, false)
+        if out_d == "none" {
+            None
+        } else {
+            get_audio_device_by_name(&ht, &out_d, false)
+        }
     } else {
         ht.default_output_device()
     };
@@ -175,10 +183,16 @@ async fn main() {
             break;
         }
 
-        let res = dispatcher
+        let res = match dispatcher
             .try_process_request(Box::new(InteractiveRequest { request: req }))
             .await
-            .unwrap();
+        {
+            Ok(res) => res,
+            Err(e) => {
+                error!("Error: {:?}", e);
+                continue;
+            }
+        };
 
         // TTS
         match tts.say(&res, args.voice_actor.clone()).await {
