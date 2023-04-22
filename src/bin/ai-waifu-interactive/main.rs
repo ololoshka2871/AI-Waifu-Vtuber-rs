@@ -16,7 +16,7 @@ use ai_waifu::{
     config::Config, dispatcher::Dispatcher, silerio_tts::SilerioTTS,
 };
 
-use tracing::{error, info, debug};
+use tracing::{debug, error, info};
 
 use crate::audio_input::get_voice_request;
 
@@ -72,9 +72,9 @@ fn display_audio_devices(host: &cpal::Host) {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-    
+
     let config = Config::load();
-    
+
     ai_waifu::init_python(&config.python_path).unwrap();
 
     let tts_local = ai_waifu::silerio_tts_local::SilerioTTSLocal::new().unwrap();
@@ -156,6 +156,7 @@ async fn main() {
         None
     };
 
+    info!("Type 'STOP' or Ctrl+D (^D) to exit");
     loop {
         // prompt
         stdout.write("> ".as_bytes()).await.unwrap();
@@ -181,11 +182,11 @@ async fn main() {
         };
 
         // check if the line is empty
-        if result.is_err() || unsafe { result.unwrap_unchecked() == 0 } {
-            continue;
+        if let Err(_) = result {
+            continue; // try again
         }
 
-        if req == "STOP" {
+        if req == "STOP" || req.starts_with("\x04") {
             break;
         }
 
