@@ -41,6 +41,8 @@ pub struct Config {
     pub busy_messages: Vec<String>, // Messages to send when the AI is busy
     #[serde(rename = "Voice2txt_Url", default = "default_urukhan_v2t_url")]
     pub voice2txt_url: Url, // Optional voice to text service URL
+    #[serde(rename = "ADD_PYTHONPATH")]
+    pub python_path: Option<Vec<String>>, // Python path
 }
 
 impl Config {

@@ -7,14 +7,12 @@ use tracing::info;
 
 pub struct SilerioTTSLocal(Py<PyAny>);
 
-static MODELS_PATH: &str = env!("CARGO_MANIFEST_DIR");
-
 impl SilerioTTSLocal {
     pub fn new() -> Result<Self, String> {
         let language = "ru";
         let model = "ru_v3";
 
-        let model_file = PathBuf::from(MODELS_PATH)
+        let model_file = PathBuf::from(crate::CARGO_MANIFEST_DIR)
             .join("models")
             .join(format!("{language}_{model}.pt"))
             .to_str()
@@ -30,11 +28,6 @@ impl SilerioTTSLocal {
             let tts_object = silero_tts_class.call1((language, model, model_file))?;
 
             let obj: PyObject = tts_object.into();
-
-            //{
-            //    let call_res = obj.call_method1(py, "say_wav_data", ("Привет, мир",))?;
-            //    let _wav_data = call_res.extract::<Vec<u8>>(py)?;
-            //}
 
             Ok((!obj.is_none(py), obj))
         })

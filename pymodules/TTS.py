@@ -10,6 +10,8 @@ class SileroTTS:
     SAMPLE_RATE = 48000
 
     def __init__(self, language, model, model_file=None) -> None:
+        #wingdbstub.Ensure(require_connection=1, require_debugger=1) 
+        
         self._localfile = f'{language}_{model}.pt' if model_file is None else model_file
 
         # download model if not exists
@@ -46,7 +48,9 @@ class SileroTTS:
         Say text using speaker
         return audio_data_wav
         '''
-
+        
+        #import wingdbstub
+        #wingdbstub.Ensure(require_connection=1, require_debugger=1) 
         print(f"TTS: syntesis: '{text}', spk: '{speaker}'")
         print(self)
 

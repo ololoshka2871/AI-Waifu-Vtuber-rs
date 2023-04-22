@@ -8,3 +8,6 @@ config.json
 !models/.placeholder
 
 pymodules/__pycache__
+
+# Wing IDE debugger part
+pymodules/wingdbstub.py  

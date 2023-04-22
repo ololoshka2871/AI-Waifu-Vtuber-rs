@@ -72,11 +72,14 @@ fn display_audio_devices(host: &cpal::Host) {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    
+    let config = Config::load();
+    
+    ai_waifu::init_python(&config.python_path).unwrap();
 
-    ai_waifu::check_python().unwrap();
     let tts_local = ai_waifu::silerio_tts_local::SilerioTTSLocal::new().unwrap();
     let d = tts_local.say("Привет мир!", None::<String>).await.unwrap();
-    debug!("d: {:?}", d);
+    debug!("data: {:?} bytes", d.into_inner().len());
 
     let args = Cli::parse();
 
@@ -124,8 +127,6 @@ async fn main() {
     } else {
         error!("No audio output device found, only text output will be available!");
     }
-
-    let config = Config::load();
 
     let mut dispatcher = Dispatcher::new(ChatGPTEnAIBuilder::from(&config));
 
