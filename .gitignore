@@ -2,5 +2,9 @@
 /.vscode/
 Cargo.lock
 venv*/
+models/*
 
 config.json
+!models/.placeholder
+
+pymodules/__pycache__

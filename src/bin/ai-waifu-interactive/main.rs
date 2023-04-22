@@ -16,7 +16,7 @@ use ai_waifu::{
     config::Config, dispatcher::Dispatcher, silerio_tts::SilerioTTS,
 };
 
-use tracing::{error, info};
+use tracing::{error, info, debug};
 
 use crate::audio_input::get_voice_request;
 
@@ -72,6 +72,11 @@ fn display_audio_devices(host: &cpal::Host) {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+
+    ai_waifu::check_python().unwrap();
+    let tts_local = ai_waifu::silerio_tts_local::SilerioTTSLocal::new().unwrap();
+    let d = tts_local.say("Привет мир!", None::<String>).await.unwrap();
+    debug!("d: {:?}", d);
 
     let args = Cli::parse();
 
