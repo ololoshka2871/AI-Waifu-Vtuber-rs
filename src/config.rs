@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use reqwest::Url;
 use serde::Deserialize;
 
@@ -43,6 +45,8 @@ pub struct Config {
     pub voice2txt_url: Url, // Optional voice to text service URL
     #[serde(rename = "ADD_PYTHONPATH")]
     pub python_path: Option<Vec<String>>, // Python path
+    #[serde(rename = "Silerio_TTS_Model")]
+    pub silerio_tts_model: PathBuf, // Silerio TTS model file
 }
 
 impl Config {

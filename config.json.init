@@ -17,5 +17,6 @@
     "Voice2txt_Url": "http://localhost:3154/recognize",
     "ADD_PYTHONPATH": [
         "/path/to/site-packages"
-    ]
+    ],
+    "Silerio_TTS_Model": "models/ru_ru_v3.pt.torchscript.pt"
 }
