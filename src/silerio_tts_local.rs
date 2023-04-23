@@ -3,7 +3,7 @@ use std::{io::Cursor, path::PathBuf};
 use bytes::Bytes;
 use pyo3::{types::PyModule, Py, PyAny, PyErr, PyObject, Python};
 
-use tracing::info;
+use tracing::{info, debug};
 
 pub struct SilerioTTSLocal(Py<PyAny>);
 
@@ -14,12 +14,15 @@ impl SilerioTTSLocal {
 
         let model_file = PathBuf::from(crate::CARGO_MANIFEST_DIR)
             .join("models")
-            .join(format!("{language}_{model}.pt"))
+            .join(format!("{language}_{model}.pt.torchscript.pt"))
             .to_str()
             .unwrap()
             .to_string();
 
         info!("Loading model file: {}", &model_file);
+
+        let m = tch::jit::CModule::load(&model_file).map_err(|e| e.to_string())?;
+        debug!("{:?}", m);
 
         let (no_null, obj) = Python::with_gil(|py| {
             let tts = PyModule::import(py, "TTS")?;
@@ -48,13 +51,20 @@ impl SilerioTTSLocal {
         let obj = &self.0;
         let res = Python::with_gil(move |py| {
             let voice = voice_id.map(|v| v.into());
-            let call_res = obj.call_method1(py, "say_wav_data", (text.into(), voice))?;
-            let wav_data = call_res.extract::<Vec<u8>>(py)?;
+            let torch_args = obj.call_method1(py, "prepare_torch_data", (text.into(), voice))?;
+            //let wav_data = call_res.extract::<PyObject>(py)?;
 
-            Ok(wav_data)
+            let device = match torch_args.getattr(py, "device")?.extract(py)?  {
+                "cpu" => tch::Device::Cpu,
+                "cuda" => tch::Device::Cuda(0),
+                _ => tch::Device::Cpu,
+            };
+
+            Ok((torch_args, device))
         })
-        .map_err(|e: PyErr| format!("Error in Python: {}", e))?;
+        .map_err(|e: PyErr| format!("Error in prepare_torch_args: {}", e))?;
 
-        Ok(Cursor::new(res.into()))
+        //Ok(Cursor::new(res.into()))
+        Ok(Cursor::new(Bytes::new()))
     }
 }
