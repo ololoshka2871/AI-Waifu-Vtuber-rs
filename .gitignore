@@ -2,12 +2,13 @@
 /.vscode/
 Cargo.lock
 venv*/
-models/*
+__pycache__
 
 config.json
-!models/.placeholder
-
-pymodules/__pycache__
 
 # Wing IDE debugger part
 pymodules/wingdbstub.py  
+
+# models
+models/*
+!models/.placeholder

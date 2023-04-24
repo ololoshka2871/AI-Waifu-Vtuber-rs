@@ -16,6 +16,7 @@ use ai_waifu::{
     config::Config, dispatcher::Dispatcher, silerio_tts::SilerioTTS,
 };
 
+#[allow(unused_imports)]
 use tracing::{debug, error, info};
 
 use crate::audio_input::get_voice_request;
@@ -75,15 +76,9 @@ async fn main() {
 
     let config = Config::load();
 
-    //ai_waifu::init_python(&config.python_path).unwrap();
-
-    let tts_local = ai_waifu::silerio_tts_local::SilerioTTSLocal::new(&config.silerio_tts_model)
-        .expect(format!("Failed to load SilerioTTS model {}. Please check if The file exists and it's a TorchScript model file", 
-            config.silerio_tts_model.to_str().unwrap()).as_str());
-    let d = tts_local.say("Привет мир!", None::<String>).await.unwrap();
-    debug!("data: {:?} bytes", d.into_inner().len());
-
     let args = Cli::parse();
+
+    //let mut external_svc = ai_waifu::start_external_services::start_external_services(&config).unwrap();
 
     let ht = cpal::default_host();
 
@@ -239,4 +234,6 @@ async fn main() {
             .await
             .unwrap();
     }
+
+    //external_svc.iter_mut().for_each(|s| s.kill().unwrap());
 }

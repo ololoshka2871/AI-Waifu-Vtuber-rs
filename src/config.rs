@@ -15,6 +15,10 @@ fn default_urukhan_v2t_url() -> Url {
     Url::parse("http://localhost:3154/recognize").unwrap()
 }
 
+fn default_models_store_path() -> PathBuf {
+    PathBuf::from(crate::CARGO_MANIFEST_DIR).join("models")
+}
+
 fn auto() -> String {
     "auto".to_string()
 }
@@ -39,14 +43,16 @@ pub struct Config {
     pub tts_service_url: Url, // TTS service URL
     #[serde(rename = "Voice_character")]
     pub voice_character: Option<String>, // Voice character name (like "ksenia")
+    #[serde(rename = "Voice_language")]
+    pub voice_language: String, // Voice language (like "ru")
+    #[serde(rename = "Voice_model")]
+    pub voice_model: String, // Voice model name (like "standard")
     #[serde(rename = "Busy_messages")]
     pub busy_messages: Vec<String>, // Messages to send when the AI is busy
     #[serde(rename = "Voice2txt_Url", default = "default_urukhan_v2t_url")]
     pub voice2txt_url: Url, // Optional voice to text service URL
-    #[serde(rename = "ADD_PYTHONPATH")]
-    pub python_path: Option<Vec<String>>, // Python path
-    #[serde(rename = "Silerio_TTS_Model")]
-    pub silerio_tts_model: PathBuf, // Silerio TTS model file
+    #[serde(rename = "ModelsStorePath", default = "default_models_store_path")]
+    pub models_store_path: PathBuf, // Path to the models store
 }
 
 impl Config {
