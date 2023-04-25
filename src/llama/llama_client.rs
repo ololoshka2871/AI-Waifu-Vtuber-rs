@@ -59,13 +59,13 @@ impl LLaMaClient {
             .client
             .post(self.config.api_url.clone())
             .json(&CompletionRequest {
-                //model: self.config.engine.as_ref(),
                 messages: history,
                 stream: false,
-                //temperature: self.config.temperature,
-                //top_p: self.config.top_p,
-                //frequency_penalty: self.config.frequency_penalty,
-                //presence_penalty: self.config.presence_penalty,
+                temperature: self.config.temperature,
+                top_p: self.config.top_p,
+                frequency_penalty: self.config.frequency_penalty,
+                presence_penalty: self.config.presence_penalty,
+                repeat_penalty: self.config.repeat_penalty,
                 reply_count: self.config.reply_count,
             })
             .send()
@@ -96,10 +96,11 @@ impl LLaMaClient {
                     content: message.into(),
                 }],
                 stream: false,
-                //temperature: self.config.temperature,
-                //top_p: self.config.top_p,
-                //frequency_penalty: self.config.frequency_penalty,
-                //presence_penalty: self.config.presence_penalty,
+                temperature: self.config.temperature,
+                top_p: self.config.top_p,
+                frequency_penalty: self.config.frequency_penalty,
+                presence_penalty: self.config.presence_penalty,
+                repeat_penalty: self.config.repeat_penalty,
                 reply_count: self.config.reply_count,
             })
             .send()

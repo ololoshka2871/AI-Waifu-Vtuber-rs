@@ -12,16 +12,15 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
 use ai_waifu::{
-    chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
     config::Config as BotConfig,
-    dispatcher::{AIBuilder, AIError, Dispatcher, AIDispatcher},
+    dispatcher::{AIError, Dispatcher},
     silerio_tts::SilerioTTS,
 };
 use control::{DiscordRequest, DiscordResponse};
 use discord_event_handler::DiscordEventHandler;
 
-async fn dispatcher_coroutine<T: AIBuilder, F: Fn() -> String>(
-    mut dispatcher: AIDispatcher<T>,
+async fn dispatcher_coroutine<F: Fn() -> String>(
+    mut dispatcher: Box<dyn Dispatcher>,
     mut control_request_channel_rx: Receiver<DiscordRequest>,
     text_responce_channel_tx: Sender<DiscordResponse>,
     tts_character: Option<String>,
@@ -180,7 +179,7 @@ async fn main() {
     let (text_responce_channel_tx, text_responce_channel_rx) =
         tokio::sync::mpsc::channel::<DiscordResponse>(1);
 
-    let dispatcher = AIDispatcher::new(ChatGPTEnAIBuilder::from(&config));
+    let dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
     let tts = SilerioTTS::new(config.tts_service_url);
 

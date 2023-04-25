@@ -17,7 +17,7 @@ impl From<&Config> for LLaMaEnAIBuilder {
             initial_prompt: config.initial_prompt.clone(),
             src_lang: config.src_lang.clone(),
             dest_lang: config.dest_lang.clone(),
-            llama_url: config.llama_url.clone().unwrap(),
+            llama_url: config.llama_url.clone(),
         }
     }
 }

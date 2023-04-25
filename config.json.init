@@ -1,5 +1,5 @@
 {
-    "OpenAI_Token": "<place your OpenAI token there>",
+    "OpenAI_Token": "<place your OpenAI token there or leave empty for use LLaMA>",
     "Discord_Token": "<place your Discord token there>",
     "Discord_channel_whitelist": [
         ".*Pina.*"
@@ -18,5 +18,5 @@
     ],
     "Voice2txt_Url": "http://localhost:3154/recognize",
     "ModelsStorePath": "models",
-    //"LLaMa_URL": "http://localhost:8000/v1/chat/completions" // Optional: use LLaMa instead of ChatGPT
+    "LLaMa_URL": "http://localhost:8000/v1/chat/completions"
 }

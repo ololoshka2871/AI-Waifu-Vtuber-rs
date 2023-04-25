@@ -11,12 +11,7 @@ use cpal::traits::{DeviceTrait, HostTrait};
 
 use clap::Parser;
 
-use ai_waifu::{
-    audio_dev::get_audio_device_by_name,
-    config::Config,
-    dispatcher::{AIDispatcher, Dispatcher},
-    silerio_tts::SilerioTTS,
-};
+use ai_waifu::{audio_dev::get_audio_device_by_name, config::Config, silerio_tts::SilerioTTS};
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
@@ -80,8 +75,6 @@ async fn main() {
 
     let args = Cli::parse();
 
-    //let mut external_svc = ai_waifu::start_external_services::start_external_services(&config).unwrap();
-
     let ht = cpal::default_host();
 
     if args.list_audio_devices {
@@ -127,15 +120,7 @@ async fn main() {
         error!("No audio output device found, only text output will be available!");
     }
 
-    let mut dispatcher: Box<dyn Dispatcher> = if config.llama_url.is_some() {
-        Box::new(AIDispatcher::new(
-            ai_waifu::llama_en_deeplx_builder::LLaMaEnAIBuilder::from(&config),
-        ))
-    } else {
-        Box::new(AIDispatcher::new(
-            ai_waifu::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::from(&config),
-        ))
-    };
+    let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();

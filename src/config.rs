@@ -25,8 +25,6 @@ fn auto() -> String {
 
 #[derive(Deserialize)]
 pub struct Config {
-    #[serde(rename = "OpenAI_Token")]
-    pub openai_token: String, // OpenAI API token
     #[serde(rename = "AI_initial_prompt")]
     pub initial_prompt: String, // Initial prompt for the AI
     #[serde(rename = "Discord_Token")]
@@ -54,7 +52,9 @@ pub struct Config {
     #[serde(rename = "ModelsStorePath", default = "default_models_store_path")]
     pub models_store_path: PathBuf, // Path to the models store
     #[serde(rename = "LLaMa_URL")]
-    pub llama_url: Option<Url>, // LLaMa API URL
+    pub llama_url: Url, // LLaMa API URL
+    #[serde(rename = "OpenAI_Token")]
+    pub openai_token: Option<String>, // OpenAI API token
 }
 
 impl Config {
