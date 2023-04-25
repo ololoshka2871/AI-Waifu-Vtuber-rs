@@ -1,0 +1,38 @@
+use std::str::FromStr;
+
+use derive_builder::Builder;
+use reqwest::Url;
+
+/// The struct containing main configuration for the ChatGPT API
+#[derive(Debug, Clone, PartialEq, PartialOrd, Builder)]
+#[builder(default, setter(into))]
+pub struct ModelConfiguration {
+    /// The GPT version used.
+    //pub engine: ChatGPTEngine,
+    /// Controls randomness of the output. Higher valeus means more random
+    //pub temperature: f32,
+    /// Controls diversity via nucleus sampling, not recommended to use with temperature
+    // pub top_p: f32,
+    /// Determines how much to penalize new tokens pased on their existing presence so far
+    //pub presence_penalty: f32,
+    /// Determines how much to penalize new tokens based on their existing frequency so far
+    //pub frequency_penalty: f32,
+    /// The maximum amount of replies
+    pub reply_count: u32,
+    /// URL of the /v1/chat/completions endpoint. Can be used to set a proxy
+    pub api_url: Url,
+}
+
+impl Default for ModelConfiguration {
+    fn default() -> Self {
+        Self {
+            //engine: Default::default(),
+            //temperature: 0.5,
+            //top_p: 1.0,
+            //presence_penalty: 0.0,
+            //frequency_penalty: 0.0,
+            reply_count: 1,
+            api_url: Url::from_str("https://localhost:8000/v1/chat/completions").unwrap(),
+        }
+    }
+}

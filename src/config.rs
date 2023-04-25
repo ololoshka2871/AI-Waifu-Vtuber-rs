@@ -53,6 +53,8 @@ pub struct Config {
     pub voice2txt_url: Url, // Optional voice to text service URL
     #[serde(rename = "ModelsStorePath", default = "default_models_store_path")]
     pub models_store_path: PathBuf, // Path to the models store
+    #[serde(rename = "LLaMa_URL")]
+    pub llama_url: Option<Url>, // LLaMa API URL
 }
 
 impl Config {

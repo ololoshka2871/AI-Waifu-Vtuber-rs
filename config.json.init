@@ -17,5 +17,6 @@
         "Wait please, i'm thinking!"
     ],
     "Voice2txt_Url": "http://localhost:3154/recognize",
-    "ModelsStorePath": "models"
+    "ModelsStorePath": "models",
+    //"LLaMa_URL": "http://localhost:8000/v1/chat/completions" // Optional: use LLaMa instead of ChatGPT
 }

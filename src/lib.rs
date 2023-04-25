@@ -12,5 +12,7 @@ pub mod google_translator;
 pub mod silerio_tts;
 pub mod urukhan_voice_recognize;
 pub mod start_external_services;
+pub mod llama;
+pub mod llama_en_deeplx_builder;
 
 static CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");

@@ -12,8 +12,10 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use clap::Parser;
 
 use ai_waifu::{
-    audio_dev::get_audio_device_by_name, chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder,
-    config::Config, dispatcher::Dispatcher, silerio_tts::SilerioTTS,
+    audio_dev::get_audio_device_by_name,
+    config::Config,
+    dispatcher::{AIDispatcher, Dispatcher},
+    silerio_tts::SilerioTTS,
 };
 
 #[allow(unused_imports)]
@@ -125,7 +127,15 @@ async fn main() {
         error!("No audio output device found, only text output will be available!");
     }
 
-    let mut dispatcher = Dispatcher::new(ChatGPTEnAIBuilder::from(&config));
+    let mut dispatcher: Box<dyn Dispatcher> = if config.llama_url.is_some() {
+        Box::new(AIDispatcher::new(
+            ai_waifu::llama_en_deeplx_builder::LLaMaEnAIBuilder::from(&config),
+        ))
+    } else {
+        Box::new(AIDispatcher::new(
+            ai_waifu::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::from(&config),
+        ))
+    };
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();

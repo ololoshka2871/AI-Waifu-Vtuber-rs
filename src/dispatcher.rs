@@ -37,16 +37,23 @@ pub trait AIinterface: Sync + Send {
     async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError>;
 }
 
-pub trait AIBuilder {
+pub trait AIBuilder: Send + Sync {
     fn build(&mut self) -> Box<dyn AIinterface>;
 }
 
-pub struct Dispatcher<AIB: AIBuilder> {
+#[async_trait]
+pub trait Dispatcher: Send + Sync {
+    /// Обработать запрос
+    async fn try_process_request(&mut self, request: Box<dyn AIRequest>)
+        -> Result<String, AIError>;
+}
+
+pub struct AIDispatcher<AIB: AIBuilder> {
     ai_constructor: AIB,
     user_map: HashMap<String, Mutex<Box<dyn AIinterface>>>,
 }
 
-impl<AIB: AIBuilder> Dispatcher<AIB> {
+impl<AIB: AIBuilder> AIDispatcher<AIB> {
     pub fn new(ai_constructor: AIB) -> Self {
         Self {
             ai_constructor,
@@ -54,17 +61,23 @@ impl<AIB: AIBuilder> Dispatcher<AIB> {
         }
     }
 
+    fn get_channel(&mut self, channel: String) -> &Mutex<Box<dyn AIinterface>> {
+        self.user_map
+            .entry(channel)
+            .or_insert_with(|| Mutex::new(self.ai_constructor.build()))
+    }
+}
+
+#[async_trait]
+impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
     /// Обработать запрос
-    pub async fn try_process_request(
+    async fn try_process_request(
         &mut self,
         request: Box<dyn AIRequest>,
     ) -> Result<String, AIError> {
-        let mut channel_ai = self
-            .user_map
-            .entry(request.channel())
-            .or_insert_with(|| Mutex::new(self.ai_constructor.build()))
-            .try_lock()
-            .ok_or(AIError::Busy)?;
+        let user = self.get_channel(request.channel());
+
+        let mut channel_ai = user.try_lock().ok_or(AIError::Busy)?;
 
         if request.request().is_empty() {
             Ok("".to_string())
