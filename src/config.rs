@@ -55,6 +55,8 @@ pub struct Config {
     pub llama_url: Url, // LLaMa API URL
     #[serde(rename = "OpenAI_Token")]
     pub openai_token: Option<String>, // OpenAI API token
+    #[serde(rename = "Drop_Nonconfident_Translate_lvl")]
+    pub drop_nonconfident_translate_result: Option<f64> // drop translate it confidens < value
 }
 
 impl Config {

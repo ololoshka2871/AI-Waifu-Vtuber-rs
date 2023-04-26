@@ -9,6 +9,7 @@ pub struct LLaMaEnAIBuilder {
     src_lang: String,
     dest_lang: String,
     llama_url: reqwest::Url,
+    drop_nonconfident_result: Option<f64>,
 }
 
 impl From<&Config> for LLaMaEnAIBuilder {
@@ -18,6 +19,7 @@ impl From<&Config> for LLaMaEnAIBuilder {
             src_lang: config.src_lang.clone(),
             dest_lang: config.dest_lang.clone(),
             llama_url: config.llama_url.clone(),
+            drop_nonconfident_result: config.drop_nonconfident_translate_result,
         }
     }
 }
@@ -30,7 +32,7 @@ impl AIBuilder for LLaMaEnAIBuilder {
             Box::new(ai),
             Some(self.src_lang.clone()),
             Some(self.dest_lang.clone()),
-            Some(0.55),
+            self.drop_nonconfident_result,
         );
 
         Box::new(en_ai)

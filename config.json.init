@@ -18,5 +18,6 @@
     ],
     "Voice2txt_Url": "http://localhost:3157/transcribe",
     "ModelsStorePath": "models",
-    "LLaMa_URL": "http://localhost:8000/v1/chat/completions"
+    "LLaMa_URL": "http://localhost:8000/v1/chat/completions",
+    "Drop_Nonconfident_Translate_lvl": 0.9,
 }
