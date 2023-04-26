@@ -1,9 +1,10 @@
+use std::io::Write;
+
 mod audio_input;
 mod interactive_request;
 
 use audio_input::spawn_audio_input;
 use interactive_request::InteractiveRequest;
-use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use rodio::{decoder::Decoder, OutputStream, Sink};
 
@@ -67,8 +68,23 @@ fn display_audio_devices(host: &cpal::Host) {
     }
 }
 
+fn process_rusty_result(
+    rl_res: Result<String, rustyline_async::ReadlineError>,
+) -> Result<String, &'static str> {
+    use rustyline_async::ReadlineError;
+    match rl_res {
+        Ok(line) => Ok(line),
+        Err(rustyline_async::ReadlineError::Eof) => Err("Exiting..."),
+        Err(ReadlineError::Interrupted) => Err("^C"),
+        Err(ReadlineError::Closed) => Err("Closed"),
+        Err(_) => Err("Unknown input error"),
+    }
+}
+
 #[tokio::main]
 async fn main() {
+    use futures_util::future::FutureExt;
+
     tracing_subscriber::fmt::init();
 
     let config = Config::load();
@@ -122,10 +138,6 @@ async fn main() {
 
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut reader = BufReader::new(stdin);
-
     let tts = SilerioTTS::new(config.tts_service_url);
 
     let mut audio_request_ctrl = if let Some(ain) = audio_in {
@@ -148,39 +160,22 @@ async fn main() {
         None
     };
 
-    info!("Type 'STOP' or Ctrl+D (^D) to exit");
+    let (mut rl, mut stdout) =
+        rustyline_async::Readline::new("> ".to_owned()).expect("Failed to init interactive input!");
     loop {
-        // prompt
-        stdout.write("> ".as_bytes()).await.unwrap();
-        stdout.flush().await.unwrap();
-
-        let (req, result) = if let Some(audio_request_channel) = &mut audio_request_ctrl {
-            let mut buffer = String::new();
+        let req = if let Some(audio_request_channel) = &mut audio_request_ctrl {
             tokio::select! {
-                result = reader.read_line(&mut buffer) => {
-                    (buffer.trim().to_owned(), result)
+                result = rl.readline().fuse() => {
+                    process_rusty_result(result).unwrap_or_else(|e| panic!("{}", e))
                 }
                 req = get_voice_request(&mut audio_request_channel.0) => {
-                    let len = req.len();
-                    stdout.write(req.as_bytes()).await.unwrap();
-                    stdout.write(b"\n").await.unwrap();
-                    (req, Ok(len))
+                    write!(stdout, "{req}\n").unwrap();
+                    req
                 }
             }
         } else {
-            let mut buffer = String::new();
-            let res = reader.read_line(&mut buffer).await;
-            (buffer.trim().to_owned(), res)
+            process_rusty_result(rl.readline().await).unwrap_or_else(|e| panic!("{}", e))
         };
-
-        // check if the line is empty
-        if let Err(_) = result {
-            continue; // try again
-        }
-
-        if req == "STOP" || req.starts_with("\x04") {
-            break;
-        }
 
         let res = match dispatcher
             .try_process_request(Box::new(InteractiveRequest { request: req }))
@@ -224,11 +219,6 @@ async fn main() {
         }
 
         // write the line
-        stdout
-            .write(format!("< {}\n", res).as_bytes())
-            .await
-            .unwrap();
+        write!(stdout, "< {}\n", res).unwrap();
     }
-
-    //external_svc.iter_mut().for_each(|s| s.kill().unwrap());
 }
