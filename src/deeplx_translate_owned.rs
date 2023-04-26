@@ -239,10 +239,15 @@ impl DeepLxTranslatorOwned {
 impl AIinterface for DeepLxTranslatorOwned {
     async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
         let r = request.request();
+        let req_lang = if let Some(l) = &self.src_lang{
+            l.clone()
+        } else {
+            request.lang()
+        };
 
         // translate input to english
         let translated = self
-            .translate(r.clone(), self.src_lang.clone(), "en", None)
+            .translate(r.clone(), Some(req_lang), "en", None)
             .await
             .map_err(|e| AIError::TranslateError(e))?;
         debug!("{r} ({lang:?}) => {translated}", lang = &self.src_lang);

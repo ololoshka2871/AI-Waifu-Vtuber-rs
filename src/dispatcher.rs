@@ -26,6 +26,8 @@ pub trait AIRequest: Send {
     fn request(&self) -> String;
     /// Возвращает автора запроса
     fn channel(&self) -> String;
+    /// Возвращает язык запроса
+    fn lang(&self) -> String;
 }
 
 /// Интерфейс ИИ:

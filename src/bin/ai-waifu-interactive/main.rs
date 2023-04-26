@@ -162,25 +162,28 @@ async fn main() {
 
     let (mut rl, mut stdout) =
         rustyline_async::Readline::new("> ".to_owned()).expect("Failed to init interactive input!");
+
     loop {
-        let req = if let Some(audio_request_channel) = &mut audio_request_ctrl {
+        let request = if let Some(audio_request_channel) = &mut audio_request_ctrl {
             tokio::select! {
                 result = rl.readline().fuse() => {
-                    process_rusty_result(result).unwrap_or_else(|e| panic!("{}", e))
+                    let req = process_rusty_result(result).unwrap_or_else(|e| panic!("{}", e));
+                    InteractiveRequest{request: req, lang: "auto".to_string()}
                 }
                 req = get_voice_request(&mut audio_request_channel.0) => {
-                    write!(stdout, "{req}\n").unwrap();
-                    req
+                    write!(stdout, "{} ({})\n", req.0, req.1).unwrap();
+                    InteractiveRequest{request: req.0, lang: req.1}
                 }
             }
         } else {
-            process_rusty_result(rl.readline().await).unwrap_or_else(|e| panic!("{}", e))
+            let req = process_rusty_result(rl.readline().await).unwrap_or_else(|e| panic!("{}", e));
+            InteractiveRequest {
+                request: req,
+                lang: "auto".to_string(),
+            }
         };
 
-        let res = match dispatcher
-            .try_process_request(Box::new(InteractiveRequest { request: req }))
-            .await
-        {
+        let res = match dispatcher.try_process_request(Box::new(request)).await {
             Ok(res) => res,
             Err(e) => {
                 error!("Error: {:?}", e);

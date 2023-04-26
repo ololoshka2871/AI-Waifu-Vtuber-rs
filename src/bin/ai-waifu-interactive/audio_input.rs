@@ -1,4 +1,4 @@
-use ai_waifu::urukhan_voice_recognize::UrukHanVoice2Txt;
+use ai_waifu::whisper_voice_recognize::OpenAIWhisperVoice2Txt;
 use cpal::{traits::StreamTrait, Device, Stream};
 
 use hound::WavSpec;
@@ -14,13 +14,13 @@ use tokio::{
 
 use noise_gate::NoiseGate;
 
-use tracing::error;
+use tracing::{debug, error};
 
 /// A sink which sends audiodata to spech recognition.
 pub struct Sink {
     voice2txt_url: Url,
     spec: WavSpec,
-    audio_req_tx: Sender<String>,
+    audio_req_tx: Sender<(String, String)>,
 
     current_buffer: Option<Vec<f32>>,
     tokio_handle: Handle,
@@ -29,7 +29,7 @@ pub struct Sink {
 impl Sink {
     pub fn new(
         voice2txt_url: Url,
-        audio_req_tx: Sender<String>,
+        audio_req_tx: Sender<(String, String)>,
         spec: WavSpec,
         tokio_handle: Handle,
     ) -> Self {
@@ -63,9 +63,17 @@ where
     fn end_of_transmission(&mut self) {
         if let Some(buf) = std::mem::replace(&mut self.current_buffer, None) {
             // ready
-            let voice2txt_url = self.voice2txt_url.clone();
             let channels = self.spec.channels;
             let sample_rate = self.spec.sample_rate;
+
+            let length = buf.len() as f32 / channels as f32 / sample_rate as f32;
+
+            if length < 0.6 {
+                debug!("Voice fragment too short ({length}s), skipping...");
+                return;
+            }
+
+            let voice2txt_url = self.voice2txt_url.clone();
             let audio_req_tx = self.audio_req_tx.clone();
 
             self.tokio_handle.spawn(async move {
@@ -75,11 +83,13 @@ where
                     sample_rate,
                 ) {
                     Ok(wav_data) => {
-                        let voice2txt = UrukHanVoice2Txt::new(voice2txt_url);
+                        let voice2txt = OpenAIWhisperVoice2Txt::new(voice2txt_url);
                         match voice2txt.recognize(wav_data).await {
                             Ok(text) => {
-                                if let Err(e) = audio_req_tx.send(text).await {
-                                    error!("Failed to send voice request: {:?}", e)
+                                if text.0.len() > 1 {
+                                    if let Err(e) = audio_req_tx.send(text).await {
+                                        error!("Failed to send voice request: {:?}", e)
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -98,7 +108,7 @@ where
 
 pub fn spawn_audio_input(
     ain: Device,
-    audio_req_tx: Sender<String>,
+    audio_req_tx: Sender<(String, String)>,
     noise_gate: f32,
     release_time: f32,
     voice2txt_url: Url,
@@ -149,10 +159,10 @@ pub fn spawn_audio_input(
     Ok(stream)
 }
 
-pub async fn get_voice_request(rx_channel: &mut Receiver<String>) -> String {
+pub async fn get_voice_request<T>(rx_channel: &mut Receiver<T>) -> T {
     loop {
         if let Some(s) = rx_channel.recv().await {
-            return s
+            return s;
         }
     }
 }

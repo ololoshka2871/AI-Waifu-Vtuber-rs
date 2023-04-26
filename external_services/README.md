@@ -21,12 +21,9 @@ Voice recognition service based on [UrukHan/wav2vec2-russian](https://huggingfac
 
 ## How to use
 1. Create python venv: `python3 -m venv venv`
-2. Activate venv: `source venv/bin/activate`
+2. Activate venv: for Linux `source venv/bin/activate` or for Windows `.\venv\Scripts\activate`
 3. Install requirements: `pip install -r requirements.txt`
 4. Check and run scrits to start one ore more services:
-    - `start_silerio.ps1` for Windows
-    - `start_silerio.sh` for Linux
-    - `start_stt.ps1` for Windows
-    - `start_stt.sh` for Linux
-    - `start_llama.ps1` for Windows
-    - `start_llama.sh` for Linux
+    - `start_silerio.sh`
+    - `start_tss-openai-whisper.sh`
+    - `start_llama.sh`

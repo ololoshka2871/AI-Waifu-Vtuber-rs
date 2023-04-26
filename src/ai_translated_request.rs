@@ -19,4 +19,8 @@ impl AIRequest for TranslatedAIRequest {
     fn channel(&self) -> String {
         self.original.channel()
     }
+
+    fn lang(&self) -> String {
+        "en".to_string()
+    }
 }

@@ -1,6 +1,6 @@
 use std::{borrow::Cow, io::Cursor, ops::DerefMut, sync::Arc};
 
-use ai_waifu::urukhan_voice_recognize::UrukHanVoice2Txt;
+use ai_waifu::whisper_voice_recognize::OpenAIWhisperVoice2Txt;
 use regex::RegexSet;
 use reqwest::Url;
 use rodio::Source;
@@ -275,7 +275,7 @@ impl EventHandler for DiscordEventHandler {
             let voice2txt_url = self.voice2txt_url.clone();
 
             tokio::spawn(async move {
-                let voice2txt = UrukHanVoice2Txt::new(voice2txt_url);
+                let voice2txt = OpenAIWhisperVoice2Txt::new(voice2txt_url);
 
                 loop {
                     match voice_processor.try_get_user_voice().await {
@@ -290,8 +290,8 @@ impl EventHandler for DiscordEventHandler {
                             tokio::spawn(async move {
                                 match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(voice_data, 2, 48000) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {
-                                        Ok(text) => {
-                                            info!("User {} said: {}", user_id, text);
+                                        Ok((text, lang)) => {
+                                            info!("User {} said: {} ({})", user_id, text, lang);
                                         }
                                         Err(e) => {
                                             error!("Failed to convert voice to text: {:?}", e);

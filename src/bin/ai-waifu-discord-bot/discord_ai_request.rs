@@ -15,6 +15,10 @@ impl AIRequest for DiscordAIRequest {
     fn channel(&self) -> String {
         format!("#{}", self.channel_id)
     }
+
+    fn lang(&self) -> String {
+        "auto".to_string()
+    }
 }
 
 impl std::fmt::Display for DiscordAIRequest {

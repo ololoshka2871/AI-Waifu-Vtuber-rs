@@ -8,6 +8,7 @@
     Не поддерживается библиотекой (пока)
 [v] Разделение звука на фразы по тишине
 [v] rustyline-async для консоли
+[_] [OpenAI whisper](https://github.com/openai/whisper) service
 [_] Игнорировать голосовые фрагменты длиной менее <настройка> секунд
     [_] Interactive
     [_] Discord bot

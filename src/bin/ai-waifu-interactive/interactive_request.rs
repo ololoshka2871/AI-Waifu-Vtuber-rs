@@ -1,8 +1,8 @@
-use ai_waifu::dispatcher::AIRequest;
-
+use ai_waifu::dispatcher::{AIRequest};
 
 pub struct InteractiveRequest {
     pub request: String,
+    pub lang: String,
 }
 
 impl AIRequest for InteractiveRequest {
@@ -12,5 +12,9 @@ impl AIRequest for InteractiveRequest {
 
     fn channel(&self) -> String {
         "interactive".to_string()
+    }
+
+    fn lang(&self) -> String {
+        self.lang.clone()
     }
 }

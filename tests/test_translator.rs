@@ -1,5 +1,7 @@
 mod tests {
-    use ai_waifu::{dispatcher::*, dummy_ai::DummyAI, google_translator::GoogleTranslator};
+    use ai_waifu::{
+        deeplx_translate_owned::DeepLxTranslatorOwned, dispatcher::*, dummy_ai::DummyAI,
+    };
 
     struct TestRequest {
         request: String,
@@ -14,6 +16,10 @@ mod tests {
         fn channel(&self) -> String {
             self.channel.clone()
         }
+
+        fn lang(&self) -> String {
+            "auto".to_string()
+        }
     }
 
     struct DummuENAIConstrictor;
@@ -21,14 +27,14 @@ mod tests {
     impl AIBuilder for DummuENAIConstrictor {
         fn build(&mut self) -> Box<dyn AIinterface> {
             let ai = Box::new(DummyAI);
-            let en_ai = GoogleTranslator::new(ai, Some("ru".to_string()), None);
+            let en_ai = DeepLxTranslatorOwned::new(ai, Some("ru".to_string()), None, None);
             Box::new(en_ai)
         }
     }
 
     #[tokio::test]
     async fn test_translate_ru() {
-        let mut dispatcher = AIDispatcher::new(DummuENAIConstrictor{});
+        let mut dispatcher = AIDispatcher::new(DummuENAIConstrictor {});
 
         let req = TestRequest {
             request: "Мама мыла раму.".to_string(),

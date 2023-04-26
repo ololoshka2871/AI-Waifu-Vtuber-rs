@@ -16,7 +16,7 @@
         "I'm busy, please wait",
         "Wait please, i'm thinking!"
     ],
-    "Voice2txt_Url": "http://localhost:3154/recognize",
+    "Voice2txt_Url": "http://localhost:3157/transcribe",
     "ModelsStorePath": "models",
     "LLaMa_URL": "http://localhost:8000/v1/chat/completions"
 }
