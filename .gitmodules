@@ -1,6 +1,6 @@
 [submodule "py_services/Selerio-TTS-server"]
-	path = py_services/Selerio-TTS-server
+	path = external_services/Selerio-TTS-server
 	url = https://github.com/ololoshka2871/Selerio-TTS-server.git
 [submodule "py_services/Voice-2-txt-UrukHan"]
-	path = py_services/Voice-2-txt-UrukHan
+	path = external_services/Voice-2-txt-UrukHan
 	url = https://github.com/ololoshka2871/Voice-2-txt-UrukHan.git

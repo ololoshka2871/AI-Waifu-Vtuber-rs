@@ -6,9 +6,6 @@ __pycache__
 
 config.json
 
-# Wing IDE debugger part
-pymodules/wingdbstub.py  
-
 # models
-models/*
-!models/.placeholder
+external_services/models/*
+!external_services/models/.placeholder
