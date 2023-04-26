@@ -58,7 +58,11 @@ impl DiscordEventHandler {
     }
 
     async fn send_req(&self, req: Req) {
-        if self.control_request_channel_tx.send(req).await.is_err() {
+        Self::send_req_static(&self.control_request_channel_tx, req).await;
+    }
+
+    async fn send_req_static(channel: &Sender<Req>, req: Req) {
+        if channel.send(req).await.is_err() {
             error!("Failed to send request to request handler");
         }
     }
@@ -164,6 +168,7 @@ impl EventHandler for DiscordEventHandler {
 
         if let Some(mut command_rx) = command_rx {
             info!("Cache ready");
+            let ctx = ctx.clone();
 
             tokio::spawn(async move {
                 async fn send_text_message(
@@ -273,13 +278,15 @@ impl EventHandler for DiscordEventHandler {
 
         if let Some(mut voice_processor) = voice_processor {
             let voice2txt_url = self.voice2txt_url.clone();
+            let control_request_channel_tx = self.control_request_channel_tx.clone();
+            let ctx = ctx.clone();
 
             tokio::spawn(async move {
                 let voice2txt = OpenAIWhisperVoice2Txt::new(voice2txt_url);
 
                 loop {
                     match voice_processor.try_get_user_voice().await {
-                        Ok(Some((user_id, voice_data))) => {
+                        Ok(Some((user_id, voice_data, guild_id, channel_id))) => {
                             debug!(
                                 "Voice data: from {} ({} samples)",
                                 user_id,
@@ -287,11 +294,35 @@ impl EventHandler for DiscordEventHandler {
                             );
 
                             let voice2txt = voice2txt.clone();
+                            let control_request_channel_tx = control_request_channel_tx.clone();
+                            let ctx = ctx.clone();
                             tokio::spawn(async move {
-                                match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(voice_data, 2, 48000) {
+                                match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(
+                                    voice_data, 2, 48000,
+                                ) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {
                                         Ok((text, lang)) => {
                                             info!("User {} said: {} ({})", user_id, text, lang);
+
+                                            if text.len() > 0 {
+                                                if let Some(user) =
+                                                    Self::get_user_by_id(&ctx, UserId(user_id.0))
+                                                        .await
+                                                {
+                                                    Self::send_req_static(
+                                                        &control_request_channel_tx,
+                                                        Req::TextRequest {
+                                                            guild_id: Some(guild_id),
+                                                            channel_id,
+                                                            msg_id: MessageId::from(0),
+                                                            user,
+                                                            text,
+                                                        },
+                                                    )
+                                                    .await;
+                                                }
+                                            }
+                                            // send text as request
                                         }
                                         Err(e) => {
                                             error!("Failed to convert voice to text: {:?}", e);
@@ -383,7 +414,8 @@ impl EventHandler for DiscordEventHandler {
 
                             handler.add_global_event(
                                 songbird::Event::Core(songbird::CoreEvent::SpeakingUpdate),
-                                self.voice_listener_builder.build_speaking_update_listener(),
+                                self.voice_listener_builder
+                                    .build_speaking_update_listener(guild_id, channel_id.clone()),
                             );
 
                             handler.add_global_event(

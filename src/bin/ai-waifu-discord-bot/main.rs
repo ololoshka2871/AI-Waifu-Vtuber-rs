@@ -66,7 +66,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                             == State::Voice
                             && tts_data.is_some()
                         {
-                            // Если бот в голосовом канале, то читать сообщени вслух, а отправлять тектс без вложения
+                            // Если бот в голосовом канале, то читать сообщени вслух, а отправлять текст без вложения
 
                             DiscordResponse::VoiceResponse {
                                 req_msg_id: Some(msg_id),
@@ -174,7 +174,7 @@ async fn main() {
         | GatewayIntents::GUILD_VOICE_STATES;
 
     let (control_request_channel_tx, control_request_channel_rx) =
-        tokio::sync::mpsc::channel::<DiscordRequest>(1);
+        tokio::sync::mpsc::channel::<DiscordRequest>(5);
 
     let (text_responce_channel_tx, text_responce_channel_rx) =
         tokio::sync::mpsc::channel::<DiscordResponse>(1);

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use serenity::model::prelude::{ChannelId, GuildId};
 use songbird::{
     model::{id::UserId, payload::Speaking},
     Event, EventContext, EventHandler as VoiceEventHandler,
@@ -12,7 +13,12 @@ use tracing::error;
 #[derive(Debug, Clone)]
 pub enum VoiceEvent {
     RegisterUser(UserId, u32),
-    SpeakingStateUpdate(u32, bool),
+    SpeakingStateUpdate {
+        ssrc: u32,
+        speaking: bool,
+        guid: GuildId,
+        ch_id: ChannelId,
+    },
     VoicePacket(u32, Vec<i16>),
 }
 
@@ -60,7 +66,11 @@ impl VoiceEventHandler for SpeakingStateUpdateListener {
         None
     }
 }
-pub struct SpeakingUpdateListener(Sender<VoiceEvent>);
+pub struct SpeakingUpdateListener {
+    sender: Sender<VoiceEvent>,
+    guid: GuildId,
+    ch_id: ChannelId,
+}
 
 #[async_trait]
 impl VoiceEventHandler for SpeakingUpdateListener {
@@ -71,11 +81,13 @@ impl VoiceEventHandler for SpeakingUpdateListener {
                 // You can implement logic here which reacts to a user starting
                 // or stopping speaking, and to map their SSRC to User ID.
                 if let Err(e) = self
-                    .0
-                    .send(VoiceEvent::SpeakingStateUpdate(
-                        su_data.ssrc,
-                        su_data.speaking,
-                    ))
+                    .sender
+                    .send(VoiceEvent::SpeakingStateUpdate {
+                        ssrc: su_data.ssrc,
+                        speaking: su_data.speaking,
+                        guid: self.guid,
+                        ch_id: self.ch_id,
+                    })
                     .await
                 {
                     error!("Failed to send voice event {:?}", e)
@@ -126,7 +138,10 @@ impl VoiceEventHandler for VoicePacketListener {
 
 pub fn create_voice_control_pair() -> (VoiceEventListenerBuilder, VoiceProcessor) {
     let (sender, receiver) = tokio::sync::mpsc::channel(16);
-    (VoiceEventListenerBuilder {sender}, VoiceProcessor::new(receiver))
+    (
+        VoiceEventListenerBuilder { sender },
+        VoiceProcessor::new(receiver),
+    )
 }
 
 pub struct VoiceEventListenerBuilder {
@@ -138,13 +153,21 @@ impl VoiceEventListenerBuilder {
         SpeakingStateUpdateListener(self.sender.clone())
     }
 
-    pub fn build_speaking_update_listener(&self) -> SpeakingUpdateListener {
-        SpeakingUpdateListener(self.sender.clone())
+    pub fn build_speaking_update_listener(
+        &self,
+        guid: GuildId,
+        ch_id: ChannelId,
+    ) -> SpeakingUpdateListener {
+        SpeakingUpdateListener {
+            sender: self.sender.clone(),
+            guid,
+            ch_id,
+        }
     }
 
     pub fn build_voice_packet_listener(&self) -> VoicePacketListener {
         VoicePacketListener(self.sender.clone())
-    } 
+    }
 }
 
 pub struct VoiceProcessor {
@@ -163,13 +186,13 @@ impl VoiceProcessor {
         }
     }
 
-    pub async fn try_get_user_voice(&mut self) -> Result<Option<(UserId, Vec<i16>)>, ()> {
+    pub async fn try_get_user_voice(&mut self) -> Result<Option<(UserId, Vec<i16>, GuildId, ChannelId)>, ()> {
         if let Some(ev) = self.receiver.recv().await {
             match ev {
                 VoiceEvent::RegisterUser(user_id, ssrc) => {
                     self.user_ssrc_map.insert(ssrc, user_id);
                 }
-                VoiceEvent::SpeakingStateUpdate(ssrc, speaking) => {
+                VoiceEvent::SpeakingStateUpdate { ssrc, speaking, guid, ch_id } => {
                     if speaking {
                         // start recording
                         self.storage.insert(ssrc, Vec::new());
@@ -177,7 +200,7 @@ impl VoiceProcessor {
                         // stop recording and return the recorded data
                         if let Some(res) = self.storage.remove(&ssrc) {
                             if res.len() > 4096 {
-                                return Ok(Some((self.user_ssrc_map[&ssrc], res)));
+                                return Ok(Some((self.user_ssrc_map[&ssrc], res, guid, ch_id)));
                             }
                         }
                     }
