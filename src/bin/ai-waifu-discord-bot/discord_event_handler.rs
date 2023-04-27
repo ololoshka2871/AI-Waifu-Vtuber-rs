@@ -311,10 +311,9 @@ impl EventHandler for DiscordEventHandler {
                                                 {
                                                     Self::send_req_static(
                                                         &control_request_channel_tx,
-                                                        Req::TextRequest {
-                                                            guild_id: Some(guild_id),
+                                                        Req::VoiceRequest {
+                                                            guild_id,
                                                             channel_id,
-                                                            msg_id: MessageId::from(0),
                                                             user,
                                                             text,
                                                         },

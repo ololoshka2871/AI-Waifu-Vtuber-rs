@@ -17,6 +17,13 @@ pub enum DiscordRequest {
         text: String,
     },
 
+    VoiceRequest {
+        guild_id: GuildId,
+        channel_id: ChannelId,
+        user: User,
+        text: String,
+    },
+
     /// User joined a voice channel
     VoiceConnected {
         guild_id: Option<GuildId>,

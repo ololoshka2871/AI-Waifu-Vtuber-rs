@@ -2,7 +2,7 @@ use ai_waifu::dispatcher::AIRequest;
 use serenity::model::prelude::ChannelId;
 
 
-pub(crate) struct DiscordAIRequest {
+pub struct DiscordAIRequest {
     pub request: String,
     pub channel_id: ChannelId,
 }
