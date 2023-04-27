@@ -1,4 +1,3 @@
-use ai_waifu::whisper_voice_recognize::OpenAIWhisperVoice2Txt;
 use cpal::{traits::StreamTrait, Device, Stream};
 
 use hound::WavSpec;
@@ -16,9 +15,13 @@ use noise_gate::NoiseGate;
 
 use tracing::{debug, error};
 
+use crate::whisper_voice_recognize::OpenAIWhisperVoice2Txt;
+
 /// A sink which sends audiodata to spech recognition.
 pub struct Sink {
     voice2txt_url: Url,
+    minimal_fragment_length: f32,
+    maximal_fragment_length: f32,
     spec: WavSpec,
     audio_req_tx: Sender<(String, String)>,
 
@@ -29,12 +32,16 @@ pub struct Sink {
 impl Sink {
     pub fn new(
         voice2txt_url: Url,
+        minimal_fragment_length: f32,
+        maximal_fragment_length: f32,
         audio_req_tx: Sender<(String, String)>,
         spec: WavSpec,
         tokio_handle: Handle,
     ) -> Self {
         Sink {
             voice2txt_url: voice2txt_url,
+            minimal_fragment_length,
+            maximal_fragment_length,
             audio_req_tx,
             spec,
             current_buffer: None,
@@ -68,20 +75,29 @@ where
 
             let length = buf.len() as f32 / channels as f32 / sample_rate as f32;
 
-            if length < 0.6 {
-                debug!("Voice fragment too short ({length}s), skipping...");
+            if length < self.minimal_fragment_length {
+                debug!(
+                    "Voice fragment too short ({length}s < {min}s), skipping...",
+                    min = self.minimal_fragment_length,
+                    length = length
+                );
                 return;
+            } else if length > self.maximal_fragment_length {
+                debug!(
+                    "Voice fragment too long ({length}s > {max}s), skipping...",
+                    max = self.maximal_fragment_length,
+                    length = length
+                );
+                return;
+            } else {
+                debug!("Got voice fragment length: {}s", length);
             }
 
             let voice2txt_url = self.voice2txt_url.clone();
             let audio_req_tx = self.audio_req_tx.clone();
 
             self.tokio_handle.spawn(async move {
-                match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(
-                    buf,
-                    channels,
-                    sample_rate,
-                ) {
+                match super::audio_halpers::voice_data_to_wav_buf_gain(buf, channels, sample_rate) {
                     Ok(wav_data) => {
                         let voice2txt = OpenAIWhisperVoice2Txt::new(voice2txt_url);
                         match voice2txt.recognize(wav_data).await {
@@ -90,6 +106,8 @@ where
                                     if let Err(e) = audio_req_tx.send(text).await {
                                         error!("Failed to send voice request: {:?}", e)
                                     }
+                                } else {
+                                    debug!("No words recognized...");
                                 }
                             }
                             Err(e) => {
@@ -112,6 +130,8 @@ pub fn spawn_audio_input(
     noise_gate: f32,
     release_time: f32,
     voice2txt_url: Url,
+    minimal_fragment_length: f32,
+    maximal_fragment_length: f32,
     tokio_handle: Handle,
 ) -> Result<Stream, String> {
     let config = ain.default_input_config().map_err(|e| format!("{e}"))?;
@@ -123,6 +143,8 @@ pub fn spawn_audio_input(
 
     let mut sink = Sink::new(
         voice2txt_url,
+        minimal_fragment_length,
+        maximal_fragment_length,
         audio_req_tx,
         WavSpec {
             channels: 1,

@@ -297,7 +297,7 @@ impl EventHandler for DiscordEventHandler {
                             let control_request_channel_tx = control_request_channel_tx.clone();
                             let ctx = ctx.clone();
                             tokio::spawn(async move {
-                                match ai_waifu::audio_halpers::voice_data_to_wav_buf_gain(
+                                match ai_waifu::utils::audio_halpers::voice_data_to_wav_buf_gain(
                                     voice_data, 2, 48000,
                                 ) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {

@@ -1,2 +1,6 @@
 start*.sh
 !start*-example.sh
+
+# models
+models/*
+!models/.placeholder

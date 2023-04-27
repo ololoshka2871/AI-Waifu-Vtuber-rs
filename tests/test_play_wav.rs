@@ -3,7 +3,7 @@ mod tests {
 
     use rodio::OutputStream;
 
-    use ai_waifu::audio_dev::get_audio_device_by_name;
+    use ai_waifu::utils::audio_dev::get_audio_device_by_name;
 
     #[tokio::test]
     async fn test_play_wav() {

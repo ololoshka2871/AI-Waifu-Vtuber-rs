@@ -12,7 +12,7 @@ See `external_services` directory dor details
 
 ## How to use
 ### Config
-1. Copy `config.json.init` to `config.json`
+1. Copy `config.example.json` to `config.json`
 2. Fill `config.json` with your data
 
 ### Run

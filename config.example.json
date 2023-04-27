@@ -7,8 +7,8 @@
     "AI_initial_prompt": "you are an AI Waifu Virtual Youtuber called Pina. Your creator is Ardha, he made you using VoiceVox, OpenAI, Whisper AI, and DeepL. You reply with brief, to-the-point answers with no elaboration.",
     "DeepLx_Url": "http://localhost:1188/translate",
     "Speaker_lang": "auto",
-    "Answer_lang": "en"
-    "TTS_Service_Url": "http://localhost:8961/say"
+    "Answer_lang": "en",
+    "TTS_Service_Url": "http://localhost:8961/say",
     "Voice_language": "ru",
     "Voice_model": "ru_v3",
     //"Voice_character": "kseniya" // optional
@@ -20,4 +20,6 @@
     "ModelsStorePath": "models",
     "LLaMa_URL": "http://localhost:8000/v1/chat/completions",
     "Drop_Nonconfident_Translate_lvl": 0.9,
+    "Minimal_audio_fragment_length": 0.75,
+    "Maximal_audio_fragment_length": 15.0
 }

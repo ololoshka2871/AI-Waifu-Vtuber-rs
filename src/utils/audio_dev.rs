@@ -1,8 +1,11 @@
 use cpal::traits::HostTrait;
 use rodio::DeviceTrait;
 
-
-pub fn get_audio_device_by_name(host: &cpal::Host, name: &str, input: bool) -> Option<cpal::Device> {
+pub fn get_audio_device_by_name(
+    host: &cpal::Host,
+    name: &str,
+    input: bool,
+) -> Option<cpal::Device> {
     let devices = if input {
         host.input_devices()
     } else {

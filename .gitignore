@@ -5,7 +5,3 @@ venv*/
 __pycache__
 
 config.json
-
-# models
-external_services/models/*
-!external_services/models/.placeholder

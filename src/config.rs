@@ -56,7 +56,11 @@ pub struct Config {
     #[serde(rename = "OpenAI_Token")]
     pub openai_token: Option<String>, // OpenAI API token
     #[serde(rename = "Drop_Nonconfident_Translate_lvl")]
-    pub drop_nonconfident_translate_result: Option<f64> // drop translate it confidens < value
+    pub drop_nonconfident_translate_result: Option<f64>, // drop translate it confidens < value
+    #[serde(rename = "Minimal_audio_fragment_length")]
+    pub minimal_audio_fragment_length: f32, // Minimal audio fragment length in seconds
+    #[serde(rename = "Maximal_audio_fragment_length")]
+    pub maximal_audio_fragment_length: f32, // Maximal audio fragment length in seconds
 }
 
 impl Config {

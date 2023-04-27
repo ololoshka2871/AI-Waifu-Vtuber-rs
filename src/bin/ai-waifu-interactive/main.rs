@@ -1,9 +1,7 @@
 use std::io::Write;
 
-mod audio_input;
 mod interactive_request;
 
-use audio_input::spawn_audio_input;
 use interactive_request::InteractiveRequest;
 
 use rodio::{decoder::Decoder, OutputStream, Sink};
@@ -12,12 +10,15 @@ use cpal::traits::{DeviceTrait, HostTrait};
 
 use clap::Parser;
 
-use ai_waifu::{audio_dev::get_audio_device_by_name, config::Config, silerio_tts::SilerioTTS};
+use ai_waifu::{
+    config::Config, silerio_tts::SilerioTTS,
+    utils::{audio_input::spawn_audio_input, audio_dev::get_audio_device_by_name},
+};
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
 
-use crate::audio_input::get_voice_request;
+use ai_waifu::utils::audio_input::get_voice_request;
 
 /// Ai Waifu interactive mode
 #[derive(Parser)]
@@ -148,6 +149,8 @@ async fn main() {
             args.noise_gate,
             args.release_time,
             config.voice2txt_url,
+            config.minimal_audio_fragment_length,
+            config.maximal_audio_fragment_length,
             tokio::runtime::Handle::current(),
         ) {
             Ok(stream) => Some((audio_req_rx, stream)),

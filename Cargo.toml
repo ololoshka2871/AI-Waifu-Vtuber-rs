@@ -54,7 +54,7 @@ dasp = "0.11.0"
 dagc = "0.1"
 
 # interactive input
-rustyline-async = { version = "=0.3.0", no-default-features = true }
+rustyline-async = { version = "=0.3.0", default-features = false } # В версии 0.3.1 двоение букв
 futures-util="0.3"
 
 
@@ -66,3 +66,6 @@ name = "ai-waifu-discord-bot"
 
 [[bin]]
 name = "ai-waifu-interactive"
+
+[[bin]]
+name = "tts-test"
