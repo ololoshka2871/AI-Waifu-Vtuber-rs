@@ -11,13 +11,13 @@ pub struct ChatGPTEnAIBuilder {
     dest_lang: String,
 }
 
-impl From<&Config> for ChatGPTEnAIBuilder {
-    fn from(config: &Config) -> Self {
+impl ChatGPTEnAIBuilder {
+    pub fn new(openai_token: String, config: &Config) -> Self {
         Self {
-            openai_token: config.openai_token.clone().unwrap(),
+            openai_token,
             initial_prompt: config.initial_prompt.clone(),
-            src_lang: config.src_lang.clone(),
-            dest_lang: config.dest_lang.clone(),
+            src_lang: config.deeplx_translate_config.src_lang.clone(),
+            dest_lang: config.deeplx_translate_config.dest_lang.clone(),
         }
     }
 }

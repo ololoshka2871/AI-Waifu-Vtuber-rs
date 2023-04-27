@@ -1,25 +1,39 @@
 {
-    "OpenAI_Token": "<place your OpenAI token there or leave empty for use LLaMA>",
-    "Discord_Token": "<place your Discord token there>",
-    "Discord_channel_whitelist": [
-        ".*Pina.*"
-    ],
+    "AIEngine": {
+        "type": "ChatGPT",
+        "OpenAI_Token": "<place your OpenAI token there>"
+    },
+    //---or---
+    "AIEngine": {
+        "type": "LLaMa",
+        "LLaMa_URL": "http://localhost:8000/v1/chat/completions"
+    },
     "AI_initial_prompt": "you are an AI Waifu Virtual Youtuber called Pina. Your creator is Ardha, he made you using VoiceVox, OpenAI, Whisper AI, and DeepL. You reply with brief, to-the-point answers with no elaboration.",
-    "DeepLx_Url": "http://localhost:1188/translate",
-    "Speaker_lang": "auto",
-    "Answer_lang": "en",
-    "TTS_Service_Url": "http://localhost:8961/say",
-    "Voice_language": "ru",
-    "Voice_model": "ru_v3",
-    //"Voice_character": "kseniya" // optional
+    
+    "Discord_Config": {
+        "Discord_Token": "<place your Discord token there>",
+        "Discord_channel_whitelist": [
+            ".*Pina.*"
+        ]
+    },
+    "DeepLx_Translate_Config": {
+        "Speaker_lang": "auto",
+        "Answer_lang": "en"
+    },
+    "Silerio_TTS_Config": {
+        "TTS_Service_Url": "http://localhost:8961/say",
+        "Voice_language": "ru",
+        "Voice_model": "ru_v3",
+        //"Voice_character": "kseniya" // optional
+    },
     "Busy_messages": [
         "I'm busy, please wait",
         "Wait please, i'm thinking!"
     ],
-    "Voice2txt_Url": "http://localhost:3157/transcribe",
-    "ModelsStorePath": "models",
-    "LLaMa_URL": "http://localhost:8000/v1/chat/completions",
-    "Drop_Nonconfident_Translate_lvl": 0.9,
-    "Minimal_audio_fragment_length": 0.75,
-    "Maximal_audio_fragment_length": 15.0
+    "STT_Config": {
+        "STT_Url": "http://localhost:3157/transcribe",
+        //"Drop_Nonconfident_Translate_lvl": 0.9, // optional
+        "Minimal_audio_fragment_length": 0.75,
+        "Maximal_audio_fragment_length": 15.0 
+    }
 }

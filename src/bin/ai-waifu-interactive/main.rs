@@ -139,7 +139,7 @@ async fn main() {
 
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.tts_service_url);
+    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url);
 
     let mut audio_request_ctrl = if let Some(ain) = audio_in {
         let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
@@ -148,9 +148,9 @@ async fn main() {
             audio_req_tx,
             args.noise_gate,
             args.release_time,
-            config.voice2txt_url,
-            config.minimal_audio_fragment_length,
-            config.maximal_audio_fragment_length,
+            config.stt_config.voice2txt_url,
+            config.stt_config.minimal_audio_fragment_length,
+            config.stt_config.maximal_audio_fragment_length,
             tokio::runtime::Handle::current(),
         ) {
             Ok(stream) => Some((audio_req_rx, stream)),

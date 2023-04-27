@@ -157,7 +157,7 @@ async fn main() {
 
     let dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.tts_service_url);
+    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url);
 
     let busy_messages = config.busy_messages;
 
@@ -165,7 +165,7 @@ async fn main() {
         dispatcher,
         control_request_channel_rx,
         text_responce_channel_tx,
-        config.voice_character,
+        config.silerio_tts_config.voice_character,
         tts,
         move || {
             use rand::Rng;
@@ -183,12 +183,12 @@ async fn main() {
     // read the audio data that other people are sending us!
     let songbird_config = Config::default().decode_mode(DecodeMode::Decode);
 
-    let mut bot = Client::builder(&config.discord_token, intents)
+    let mut bot = Client::builder(&config.discord_config.discord_token, intents)
         .event_handler(DiscordEventHandler::new(
             control_request_channel_tx,
             text_responce_channel_rx,
-            config.channel_whitelist,
-            config.voice2txt_url,
+            config.discord_config.channel_whitelist,
+            config.stt_config.voice2txt_url,
         ))
         .framework(framework)
         .register_songbird_from_config(songbird_config)

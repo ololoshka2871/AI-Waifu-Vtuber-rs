@@ -76,9 +76,9 @@ async fn main() {
             audio_req_tx,
             args.noise_gate,
             args.release_time,
-            config.voice2txt_url,
-            config.minimal_audio_fragment_length,
-            config.maximal_audio_fragment_length,
+            config.stt_config.voice2txt_url,
+            config.stt_config.minimal_audio_fragment_length,
+            config.stt_config.maximal_audio_fragment_length,
             tokio::runtime::Handle::current(),
         )
         .expect("Failed to init audio input");

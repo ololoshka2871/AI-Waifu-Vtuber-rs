@@ -1,3 +1,5 @@
+use reqwest::Url;
+
 use crate::{
     config::Config,
     dispatcher::{AIBuilder, AIinterface},
@@ -8,18 +10,18 @@ pub struct LLaMaEnAIBuilder {
     initial_prompt: String,
     src_lang: String,
     dest_lang: String,
-    llama_url: reqwest::Url,
+    llama_url: Url,
     drop_nonconfident_result: Option<f64>,
 }
 
-impl From<&Config> for LLaMaEnAIBuilder {
-    fn from(config: &Config) -> Self {
+impl LLaMaEnAIBuilder {
+    pub fn new(llama_url: Url, config: &Config) -> Self {
         Self {
             initial_prompt: config.initial_prompt.clone(),
-            src_lang: config.src_lang.clone(),
-            dest_lang: config.dest_lang.clone(),
-            llama_url: config.llama_url.clone(),
-            drop_nonconfident_result: config.drop_nonconfident_translate_result,
+            src_lang: config.deeplx_translate_config.src_lang.clone(),
+            dest_lang: config.deeplx_translate_config.dest_lang.clone(),
+            llama_url,
+            drop_nonconfident_result: config.stt_config.drop_nonconfident_translate_result,
         }
     }
 }
