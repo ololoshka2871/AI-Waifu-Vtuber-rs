@@ -8,7 +8,7 @@ use songbird::{
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use tracing::error;
+use tracing::{error, trace};
 
 #[derive(Debug, Clone)]
 pub enum VoiceEvent {
@@ -46,7 +46,7 @@ impl VoiceEventHandler for SpeakingStateUpdateListener {
                 // SSRCs and map the SSRC to the User ID and maintain this state.
                 // Using this map, you can map the `ssrc` in `voice_packet`
                 // to the user ID and handle their audio packets separately.
-                println!(
+                trace!(
                     "Speaking state update: user {:?} has SSRC {:?}, using {:?}",
                     user_id, ssrc, speaking,
                 );

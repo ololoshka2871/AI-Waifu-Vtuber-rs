@@ -37,6 +37,12 @@ pub enum DiscordRequest {
         channel_id: ChannelId,
         user: User,
     },
+
+    ResetConversation {
+        guild_id: Option<GuildId>,
+        channel_id: ChannelId,
+        user: User,
+    },
 }
 
 #[derive(Debug, Clone)]

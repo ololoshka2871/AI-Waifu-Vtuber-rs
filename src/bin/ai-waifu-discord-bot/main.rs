@@ -5,7 +5,7 @@ mod process_request;
 mod voice_ch_map;
 mod voice_receiver;
 
-use serenity::{client::Client, framework::StandardFramework, prelude::GatewayIntents};
+use serenity::{client::Client, framework::StandardFramework, prelude::GatewayIntents, model::prelude::ChannelId};
 
 use songbird::{driver::DecodeMode, Config, SerenityInit};
 
@@ -31,6 +31,11 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
     tts: SilerioTTS,
     busy_messages_generator: F,
 ) {
+    // грязный хак
+    fn convert_user_to_pseudo_channel_id(user: &serenity::model::prelude::User) -> ChannelId {
+        ChannelId(user.id.0)
+    }
+
     let mut giuld_ch_user_map = VoiceChannelMap::new();
 
     while let Some(req) = control_request_channel_rx.recv().await {
@@ -76,7 +81,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
             } => {
                 let request = DiscordAIRequest {
                     request: text,
-                    channel_id: serenity::model::prelude::ChannelId(user.id.0), // грязный хак
+                    channel_id: convert_user_to_pseudo_channel_id(&user), 
                 };
 
                 process_voice_request(
@@ -115,6 +120,19 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                     debug!("{:?}", &giuld_ch_user_map);
                 } else {
                     warn!("Not a guild event, ignore!");
+                }
+            }
+            DiscordRequest::ResetConversation { guild_id: _, channel_id, user } => {
+                let ch = if channel_id.0 != 0 {
+                    channel_id
+                } else {
+                    convert_user_to_pseudo_channel_id(&user)
+                };
+
+                if let Err(e) = dispatcher.reset(format!("#{}", ch.0)).await {
+                    error!("Failed to reset conversation: {:#?}", e);
+                } else {
+                    info!("Reset conversation by {}", user.name); 
                 }
             }
         }

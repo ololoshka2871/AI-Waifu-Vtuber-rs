@@ -272,4 +272,8 @@ impl AIinterface for DeepLxTranslatorOwned {
 
         Ok(res)
     }
+
+    async fn reset(&mut self) -> Result<(), AIError> {
+        self.ai.reset().await
+    }
 }

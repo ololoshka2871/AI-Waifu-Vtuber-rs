@@ -19,6 +19,9 @@ pub enum AIError {
 
     /// Неизвестная ошибка
     UnknownError,
+
+    /// Ошибка сброса, нечего очищать
+    ResetErrorEmpty,
 }
 
 pub trait AIRequest: Send {
@@ -37,6 +40,9 @@ pub trait AIRequest: Send {
 pub trait AIinterface: Sync + Send {
     /// Обработать запрос
     async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError>;
+
+    /// Сбросить состояние ИИ
+    async fn reset(&mut self) -> Result<(), AIError>;
 }
 
 pub trait AIBuilder: Send + Sync {
@@ -48,6 +54,9 @@ pub trait Dispatcher: Send + Sync {
     /// Обработать запрос
     async fn try_process_request(&mut self, request: Box<dyn AIRequest>)
         -> Result<String, AIError>;
+
+    /// Сбросить состояние ИИ
+    async fn reset(&mut self, channel: String) -> Result<(), AIError>;
 }
 
 pub struct AIDispatcher<AIB: AIBuilder> {
@@ -77,14 +86,25 @@ impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
         &mut self,
         request: Box<dyn AIRequest>,
     ) -> Result<String, AIError> {
-        let user = self.get_channel(request.channel());
+        let channel = self.get_channel(request.channel());
 
-        let mut channel_ai = user.try_lock().ok_or(AIError::Busy)?;
+        let mut channel_ai = channel.try_lock().ok_or(AIError::Busy)?;
 
         if request.request().is_empty() {
             Ok("".to_string())
         } else {
             channel_ai.process(request).await
+        }
+    }
+
+    /// Сбросить состояние ИИ
+    async fn reset(&mut self, channel: String) -> Result<(), AIError> {
+        let ch = self.user_map.entry(channel);
+        if let std::collections::hash_map::Entry::Occupied(mut entry) = ch {
+            let mut channel_ai = entry.get_mut().try_lock().ok_or(AIError::Busy)?;
+            channel_ai.reset().await
+        } else {
+            Err(AIError::ResetErrorEmpty)
         }
     }
 }

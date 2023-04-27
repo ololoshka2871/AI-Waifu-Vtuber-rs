@@ -38,4 +38,15 @@ impl AIinterface for ChatGPT {
             None => Err(AIError::UnknownError),
         }
     }
+
+    async fn reset(&mut self) -> Result<(), AIError> {
+        if self.conversation.history.len() == 0 {
+            Err(AIError::ResetErrorEmpty)
+        } else {
+            let first_message = self.conversation.history.remove(0);
+            self.conversation.history.clear();
+            self.conversation.history.push(first_message);
+            Ok(())
+        }
+    }
 }

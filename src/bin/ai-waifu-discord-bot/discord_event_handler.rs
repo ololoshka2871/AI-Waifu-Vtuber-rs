@@ -9,7 +9,10 @@ use serenity::{
     model::{
         channel::Message,
         id::{ChannelId, GuildId},
-        prelude::{Guild, MessageId, MessageReference, Ready, UserId},
+        prelude::{
+            interaction::{Interaction, InteractionResponseType},
+            Guild, MessageId, MessageReference, Ready, UserId,
+        },
         user::User,
         voice::VoiceState,
     },
@@ -154,8 +157,47 @@ impl DiscordEventHandler {
 
 #[async_trait]
 impl EventHandler for DiscordEventHandler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
+
+        let _global_command =
+            serenity::model::application::command::Command::create_global_application_command(
+                &ctx.http,
+                |command| {
+                    command
+                        .name("reset")
+                        .description("Reset conversation state")
+                },
+            )
+            .await;
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            let content = match command.data.name.as_str() {
+                "reset" => {
+                    self.send_req(Req::ResetConversation {
+                        guild_id: command.guild_id.clone(),
+                        channel_id: command.channel_id.clone(),
+                        user: command.user.clone(),
+                    })
+                    .await;
+                    "Resetting conversation state...".to_string()
+                }
+                _ => "not implemented :(".to_string(),
+            };
+
+            if let Err(why) = command
+                .create_interaction_response(&ctx.http, |response| {
+                    response
+                        .kind(InteractionResponseType::ChannelMessageWithSource)
+                        .interaction_response_data(|message| message.content(content))
+                })
+                .await
+            {
+                error!("Cannot respond to slash command: {}", why);
+            }
+        }
     }
 
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
@@ -302,13 +344,15 @@ impl EventHandler for DiscordEventHandler {
                                 ) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {
                                         Ok((text, lang)) => {
-                                            info!("User {} said: {} ({})", user_id, text, lang);
-
                                             if text.len() > 0 {
                                                 if let Some(user) =
                                                     Self::get_user_by_id(&ctx, UserId(user_id.0))
                                                         .await
                                                 {
+                                                    info!(
+                                                        "User {} said: {} ({})",
+                                                        user_id, text, lang
+                                                    );
                                                     Self::send_req_static(
                                                         &control_request_channel_tx,
                                                         Req::VoiceRequest {
@@ -319,9 +363,12 @@ impl EventHandler for DiscordEventHandler {
                                                         },
                                                     )
                                                     .await;
+                                                } else {
+                                                    warn!("Unknown user with id={}, drop request \"{}\"", user_id, text);
                                                 }
+                                            } else {
+                                                debug!("Empty text after voice recognition from user: {}", user_id);
                                             }
-                                            // send text as request
                                         }
                                         Err(e) => {
                                             error!("Failed to convert voice to text: {:?}", e);

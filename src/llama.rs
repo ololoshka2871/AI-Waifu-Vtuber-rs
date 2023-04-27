@@ -19,7 +19,8 @@ impl LLaMa {
         let client = match LLaMaClient::new_with_config(
             model_config::ModelConfigurationBuilder::default()
                 .api_url(url)
-                .build().unwrap(),
+                .build()
+                .unwrap(),
         ) {
             Ok(c) => c,
             Err(e) => panic!("Failed to create ChatGPT client: {e:?}"),
@@ -45,6 +46,17 @@ impl AIinterface for LLaMa {
         match self.conversation.history.last() {
             Some(m) => Ok(m.content.clone()),
             None => Err(AIError::UnknownError),
+        }
+    }
+
+    async fn reset(&mut self) -> Result<(), AIError> {
+        if self.conversation.history.len() == 0 {
+            Err(AIError::ResetErrorEmpty)
+        } else {
+            let first_message = self.conversation.history.remove(0);
+            self.conversation.history.clear();
+            self.conversation.history.push(first_message);
+            Ok(())
         }
     }
 }

@@ -13,7 +13,7 @@ use tokio::{
 
 use noise_gate::NoiseGate;
 
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::whisper_voice_recognize::OpenAIWhisperVoice2Txt;
 
@@ -83,7 +83,7 @@ where
                 );
                 return;
             } else if length > self.maximal_fragment_length {
-                debug!(
+                warn!(
                     "Voice fragment too long ({length}s > {max}s), skipping...",
                     max = self.maximal_fragment_length,
                     length = length
@@ -93,28 +93,26 @@ where
                 debug!("Got voice fragment length: {}s", length);
             }
 
-            let voice2txt_url = self.voice2txt_url.clone();
+            // values to move into the async block
             let audio_req_tx = self.audio_req_tx.clone();
+            let voice2txt = OpenAIWhisperVoice2Txt::new(self.voice2txt_url.clone());
 
             self.tokio_handle.spawn(async move {
                 match super::audio_halpers::voice_data_to_wav_buf_gain(buf, channels, sample_rate) {
-                    Ok(wav_data) => {
-                        let voice2txt = OpenAIWhisperVoice2Txt::new(voice2txt_url);
-                        match voice2txt.recognize(wav_data).await {
-                            Ok(text) => {
-                                if text.0.len() > 1 {
-                                    if let Err(e) = audio_req_tx.send(text).await {
-                                        error!("Failed to send voice request: {:?}", e)
-                                    }
-                                } else {
-                                    debug!("No words recognized...");
+                    Ok(wav_data) => match voice2txt.recognize(wav_data).await {
+                        Ok(text) => {
+                            if text.0.len() > 0 {
+                                if let Err(e) = audio_req_tx.send(text).await {
+                                    error!("Failed to send voice request: {:?}", e)
                                 }
-                            }
-                            Err(e) => {
-                                error!("Failed to convert voice to text: {:?}", e);
+                            } else {
+                                warn!("No words recognized from fragment {}s", length);
                             }
                         }
-                    }
+                        Err(e) => {
+                            error!("Failed to convert voice to text: {:?}", e);
+                        }
+                    },
                     Err(e) => {
                         error!("Failed to encode voice data to wav: {:?}", e);
                     }
