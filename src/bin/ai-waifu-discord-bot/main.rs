@@ -5,7 +5,10 @@ mod process_request;
 mod voice_ch_map;
 mod voice_receiver;
 
-use serenity::{client::Client, framework::StandardFramework, prelude::GatewayIntents, model::prelude::ChannelId};
+use serenity::{
+    client::Client, framework::StandardFramework, model::prelude::ChannelId,
+    prelude::GatewayIntents,
+};
 
 use songbird::{driver::DecodeMode, Config, SerenityInit};
 
@@ -15,6 +18,9 @@ use tracing::{debug, error, info, warn};
 use ai_waifu::{config::Config as BotConfig, dispatcher::Dispatcher, silerio_tts::SilerioTTS};
 use control::{DiscordRequest, DiscordResponse};
 use discord_event_handler::DiscordEventHandler;
+use tracing_subscriber::{
+    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
+};
 
 use crate::{
     discord_ai_request::DiscordAIRequest,
@@ -81,7 +87,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
             } => {
                 let request = DiscordAIRequest {
                     request: text,
-                    channel_id: convert_user_to_pseudo_channel_id(&user), 
+                    channel_id: convert_user_to_pseudo_channel_id(&user),
                 };
 
                 process_voice_request(
@@ -122,7 +128,11 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                     warn!("Not a guild event, ignore!");
                 }
             }
-            DiscordRequest::ResetConversation { guild_id: _, channel_id, user } => {
+            DiscordRequest::ResetConversation {
+                guild_id: _,
+                channel_id,
+                user,
+            } => {
                 let ch = if channel_id.0 != 0 {
                     channel_id
                 } else {
@@ -132,7 +142,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                 if let Err(e) = dispatcher.reset(format!("#{}", ch.0)).await {
                     error!("Failed to reset conversation: {:#?}", e);
                 } else {
-                    info!("Reset conversation by {}", user.name); 
+                    info!("Reset conversation by {}", user.name);
                 }
             }
         }
@@ -141,7 +151,15 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    let fmt_layer = tracing_subscriber::fmt::layer().with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .init();
 
     let config = BotConfig::load();
 

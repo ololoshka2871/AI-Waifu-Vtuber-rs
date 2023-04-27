@@ -5,9 +5,12 @@ use rodio::DeviceTrait;
 use tracing::info;
 
 use ai_waifu::{
-    utils::audio_dev::get_audio_device_by_name,
     config::Config,
+    utils::audio_dev::get_audio_device_by_name,
     utils::audio_input::{get_voice_request, spawn_audio_input},
+};
+use tracing_subscriber::{
+    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
 
 /// TTS testing tool
@@ -45,7 +48,15 @@ fn display_audio_devices(host: &cpal::Host) {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    let fmt_layer = tracing_subscriber::fmt::layer().with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .init();
 
     let config = Config::load();
 

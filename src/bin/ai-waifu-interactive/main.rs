@@ -11,14 +11,18 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use clap::Parser;
 
 use ai_waifu::{
-    config::Config, silerio_tts::SilerioTTS,
-    utils::{audio_input::spawn_audio_input, audio_dev::get_audio_device_by_name},
+    config::Config,
+    silerio_tts::SilerioTTS,
+    utils::{audio_dev::get_audio_device_by_name, audio_input::spawn_audio_input},
 };
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
 
 use ai_waifu::utils::audio_input::get_voice_request;
+use tracing_subscriber::{
+    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
+};
 
 /// Ai Waifu interactive mode
 #[derive(Parser)]
@@ -86,7 +90,15 @@ fn process_rusty_result(
 async fn main() {
     use futures_util::future::FutureExt;
 
-    tracing_subscriber::fmt::init();
+    let fmt_layer = tracing_subscriber::fmt::layer().with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .init();
 
     let config = Config::load();
 
