@@ -239,7 +239,7 @@ impl DeepLxTranslatorOwned {
 impl AIinterface for DeepLxTranslatorOwned {
     async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
         let r = request.request();
-        let req_lang = if let Some(l) = &self.src_lang{
+        let req_lang = if let Some(l) = &self.src_lang {
             l.clone()
         } else {
             request.lang()
@@ -257,6 +257,8 @@ impl AIinterface for DeepLxTranslatorOwned {
             .ai
             .process(Box::new(TranslatedAIRequest::new(request, translated)))
             .await?;
+
+        let answer = crate::num2words::convert_numbers2words(answer);
 
         // translate answer to user language
         let res = self

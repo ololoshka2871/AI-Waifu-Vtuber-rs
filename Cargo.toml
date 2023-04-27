@@ -17,6 +17,8 @@ clap = "4.2"
 rand = "0.8"
 chrono = "0.4"
 derive_builder="0.12"
+num2words = "0.4.1"
+lazy_static = "1.4"
 
 # tracing
 tracing = "0.1"

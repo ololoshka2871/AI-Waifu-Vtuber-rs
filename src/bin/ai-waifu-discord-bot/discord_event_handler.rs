@@ -414,6 +414,11 @@ impl EventHandler for DiscordEventHandler {
             text: message.content,
         })
         .await;
+
+        // start typing...
+        if let Err(e) = message.channel_id.broadcast_typing(&ctx.http).await {
+            error!("Failed to start typing: {:?}", e);
+        }
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {

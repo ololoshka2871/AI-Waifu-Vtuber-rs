@@ -7,6 +7,8 @@ pub mod dummy_ai;
 pub mod llama;
 pub mod silerio_tts;
 pub mod whisper_voice_recognize;
+pub mod num2words;
+
 pub mod utils;
 
 #[allow(unused)]
@@ -22,6 +24,5 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
         config::AIEngine::LLaMa { llama_url } => Box::new(AIDispatcher::new(
             utils::llama_en_deeplx_builder::LLaMaEnAIBuilder::new(llama_url.clone(), config),
         )),
-        _ => panic!("Unsupported AI engine, please check your config file."),
     }
 }
