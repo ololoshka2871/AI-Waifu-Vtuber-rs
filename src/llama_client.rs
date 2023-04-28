@@ -1,13 +1,9 @@
-mod completion_req;
-mod converse;
-mod llama_client;
-mod model_config;
-
 use async_trait::async_trait;
 
-use crate::dispatcher::{AIError, AIRequest, AIinterface};
-
-use self::llama_client::LLaMaClient;
+use crate::{
+    dispatcher::{AIError, AIRequest, AIinterface},
+    llama::{converse, llama_client::LLaMaClient, model_config::ModelConfiguration},
+};
 
 pub struct LLaMa {
     conversation: converse::Conversation,
@@ -15,13 +11,8 @@ pub struct LLaMa {
 }
 
 impl LLaMa {
-    pub fn new<S: Into<String>>(url: reqwest::Url, prompt: S) -> Self {
-        let client = match LLaMaClient::new_with_config(
-            model_config::ModelConfigurationBuilder::default()
-                .api_url(url)
-                .build()
-                .unwrap(),
-        ) {
+    pub fn new<S: Into<String>>(config: ModelConfiguration, prompt: S) -> Self {
+        let client = match LLaMaClient::new_with_config(config) {
             Ok(c) => c,
             Err(e) => panic!("Failed to create ChatGPT client: {e:?}"),
         };

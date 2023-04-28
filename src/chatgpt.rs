@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use chatgpt::prelude::{ChatGPT as ChatGPTClient, Conversation};
+use chatgpt::prelude::{ChatGPT as ChatGPTClient, Conversation, ModelConfiguration};
 
 use crate::dispatcher::{AIError, AIRequest, AIinterface};
 
@@ -10,8 +10,8 @@ pub struct ChatGPT {
 }
 
 impl ChatGPT {
-    pub fn new<S: Into<String>>(api_key: S, prompt: S) -> Self {
-        let client = match ChatGPTClient::new(api_key) {
+    pub fn new<S: Into<String>>(api_key: S, config: ModelConfiguration, prompt: S) -> Self {
+        let client = match ChatGPTClient::new_with_config(api_key, config) {
             Ok(c) => c,
             Err(e) => panic!("Failed to create ChatGPT client: {e:?}"),
         };

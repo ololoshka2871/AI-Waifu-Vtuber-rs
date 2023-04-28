@@ -1,4 +1,5 @@
 {
+    // see additional AI parameters in src/config.rs
     "AIEngine": {
         "type": "ChatGPT",
         "OpenAI_Token": "<place your OpenAI token there>"
@@ -28,7 +29,7 @@
     },
     "Busy_messages": [
         "I'm busy, please wait",
-        "Wait please, i'm thinking!"
+        "Wait please, I'm thinking!"
     ],
     "STT_Config": {
         "STT_Url": "http://localhost:3157/transcribe",

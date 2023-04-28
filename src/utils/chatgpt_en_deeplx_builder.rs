@@ -1,3 +1,5 @@
+use chatgpt::prelude::ModelConfiguration;
+
 use crate::{
     chatgpt::ChatGPT,
     config::Config,
@@ -6,15 +8,17 @@ use crate::{
 
 pub struct ChatGPTEnAIBuilder {
     openai_token: String,
+    config: ModelConfiguration,
     initial_prompt: String,
     src_lang: String,
     dest_lang: String,
 }
 
 impl ChatGPTEnAIBuilder {
-    pub fn new(openai_token: String, config: &Config) -> Self {
+    pub fn new(openai_token: String, model_config: ModelConfiguration, config: &Config) -> Self {
         Self {
             openai_token,
+            config: model_config,
             initial_prompt: config.initial_prompt.clone(),
             src_lang: config.deeplx_translate_config.src_lang.clone(),
             dest_lang: config.deeplx_translate_config.dest_lang.clone(),
@@ -24,11 +28,13 @@ impl ChatGPTEnAIBuilder {
 
 impl AIBuilder for ChatGPTEnAIBuilder {
     fn build(&mut self) -> Box<dyn AIinterface> {
-        let ai = ChatGPT::new(self.openai_token.clone(), self.initial_prompt.clone());
+        let ai = ChatGPT::new(
+            self.openai_token.clone(),
+            self.config.clone(),
+            self.initial_prompt.clone(),
+        );
 
-        let en_ai = 
-
-        crate::deeplx_translate_owned::DeepLxTranslatorOwned::new(
+        let en_ai = crate::deeplx_translate_owned::DeepLxTranslatorOwned::new(
             Box::new(ai),
             Some(self.src_lang.clone()),
             Some(self.dest_lang.clone()),
