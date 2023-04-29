@@ -4,4 +4,6 @@ Cargo.lock
 venv*/
 __pycache__
 
-config.json
+config*.json
+!config.example.json
+```
