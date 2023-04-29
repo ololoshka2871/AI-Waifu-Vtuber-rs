@@ -28,9 +28,6 @@ struct Cli {
     /// Audio noise_gate, 0.0 - 1.0
     #[clap(short, long, default_value_t = 0.1)]
     noise_gate: f32,
-    /// Audio release_time, s
-    #[clap(short, long, default_value_t = 1.0)]
-    release_time: f32,
 }
 
 /// print all available devices
@@ -86,7 +83,6 @@ async fn main() {
             audio_in,
             audio_req_tx,
             args.noise_gate,
-            args.release_time,
             config.stt_config.voice2txt_url,
             config.stt_config.minimal_audio_fragment_length,
             config.stt_config.maximal_audio_fragment_length,

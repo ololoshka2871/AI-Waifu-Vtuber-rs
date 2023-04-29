@@ -24,14 +24,6 @@ where
         },
     )?;
 
-    //let mut voice_data = voice_data
-    //    .into_iter()
-    //    .map(|x| x.to_sample::<f32>())
-    //    .collect::<Vec<_>>();
-    //
-    //let mut dagc = dagc::MonoAgc::new(0.001, 0.0001).expect("unreachable");
-    //dagc.process(&mut voice_data);
-
     voice_data.into_iter().for_each(|x| {
         writer.write_sample(cpal::Sample::to_sample::<i16>(x)).unwrap();
     });

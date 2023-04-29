@@ -15,68 +15,47 @@ fn auto() -> String {
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-pub enum AIEngine {
-    ChatGPT {
+pub enum AIEngineType {
+    ChatGPT{
+        // OpenAI API token
         #[serde(rename = "OpenAI_Token")]
-        openai_token: String, // OpenAI API token
+        openai_token: String, 
 
         /// The GPT version used Gpt35Turbo, Gpt35Turbo_0301, Gpt4, Gpt4_32k, Gpt4_0314, Gpt4_32k_0314,
         #[serde(rename = "GPT_Version")]
         engine: Option<String>,
-
-        /// Controls randomness of the output. Higher valeus means more random
-        #[serde(rename = "Temperature")]
-        temperature: Option<f32>,
-
-        /// Controls diversity via nucleus sampling, not recommended to use with temperature
-        #[serde(rename = "Top_p")]
-        top_p:  Option<f32>,
-
-        /// Determines how much to penalize new tokens pased on their existing presence so far
-        #[serde(rename = "Presence_penalty")]
-        presence_penalty:  Option<f32>,
-
-        /// Determines how much to penalize new tokens based on their existing frequency so far
-        #[serde(rename = "Frequency_penalty")]
-        frequency_penalty:  Option<f32>,
-
-        /// The maximum amount of replies
-        #[serde(rename = "Reply_count")]
-        reply_count:  Option<u32>,
-
-        /// URL of the /v1/chat/completions endpoint. Can be used to set a proxy
-        #[serde(rename = "OpenAI_URL")]
-        api_url: Option<Url>,
     },
     LLaMa {
-        /// URL of the /v1/chat/completions endpoint. Can be used to set a proxy
-        #[serde(rename = "LLaMa_URL")]
-        api_url: Url,
+         /// URL of the /v1/chat/completions endpoint. Can be used to set a proxy
+         #[serde(rename = "Url")]
+         api_url: Url,
+    }
+}
 
-        /// Controls randomness of the output. Higher valeus means more random
-        #[serde(rename = "Temperature")]
-        temperature: Option<f32>,
+#[derive(Deserialize)]
+pub struct AIEngine {
+    #[serde(rename = "Engine_Type")]
+    pub engine_type: AIEngineType,
 
-        /// Controls diversity via nucleus sampling, not recommended to use with temperature
-        #[serde(rename = "Top_p")]
-        top_p:  Option<f32>,
+    /// Controls randomness of the output. Higher valeus means more random
+    #[serde(rename = "Temperature")]
+    pub temperature: Option<f32>,
 
-        /// Determines how much to penalize new tokens pased on their existing presence so far
-        #[serde(rename = "Presence_penalty")]
-        presence_penalty:  Option<f32>,
+    /// Controls diversity via nucleus sampling, not recommended to use with temperature
+    #[serde(rename = "Top_p")]
+    pub top_p:  Option<f32>,
 
-        /// Determines how much to penalize new tokens based on their existing frequency so far
-        #[serde(rename = "Frequency_penalty")]
-        frequency_penalty:  Option<f32>,
+    /// Determines how much to penalize new tokens pased on their existing presence so far
+    #[serde(rename = "Presence_penalty")]
+    pub presence_penalty:  Option<f32>,
 
-        /// Frequency Penalty for repeated tokens
-        #[serde(rename = "Repeat_penalty")]
-        repeat_penalty:  Option<f32>,
+    /// Determines how much to penalize new tokens based on their existing frequency so far
+    #[serde(rename = "Frequency_penalty")]
+    pub frequency_penalty:  Option<f32>,
 
-        /// The maximum amount of replies
-        #[serde(rename = "Reply_count")]
-        reply_count:  Option<u32>,
-    },
+    /// The maximum amount of replies
+    #[serde(rename = "Reply_count")]
+    pub reply_count:  Option<u32>,
 }
 
 #[derive(Deserialize)]

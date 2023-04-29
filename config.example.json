@@ -1,13 +1,17 @@
 {
-    // see additional AI parameters in src/config.rs
     "AIEngine": {
-        "type": "ChatGPT",
-        "OpenAI_Token": "<place your OpenAI token there>"
-    },
-    //---or---
-    "AIEngine": {
-        "type": "LLaMa",
-        "LLaMa_URL": "http://localhost:8000/v1/chat/completions"
+        "Engine_Type": {
+            "type": "ChatGPT",
+            "OpenAI_Token": "<place your OpenAI token there>"
+            // "Engine_Type": "Gpt35Turbo", // optional
+        },
+        //---or---
+        "Engine_Type": {
+            "type": "LLaMa",
+            "Url": "http://localhost:8000/v1/chat/completions"
+        },
+
+        // see additional AI parameters in src/config.rs
     },
     "AI_initial_prompt": "you are an AI Waifu Virtual Youtuber called Pina. Your creator is Ardha, he made you using VoiceVox, OpenAI, Whisper AI, and DeepL. You reply with brief, to-the-point answers with no elaboration.",
     
@@ -34,7 +38,7 @@
     "STT_Config": {
         "STT_Url": "http://localhost:3157/transcribe",
         //"Drop_Nonconfident_Translate_lvl": 0.9, // optional
-        "Minimal_audio_fragment_length": 0.75,
+        "Minimal_audio_fragment_length": 1.25,
         "Maximal_audio_fragment_length": 15.0 
     }
 }

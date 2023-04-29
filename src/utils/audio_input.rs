@@ -126,7 +126,6 @@ pub fn spawn_audio_input(
     ain: Device,
     audio_req_tx: Sender<(String, String)>,
     noise_gate: f32,
-    release_time: f32,
     voice2txt_url: Url,
     minimal_fragment_length: f32,
     maximal_fragment_length: f32,
@@ -137,7 +136,7 @@ pub fn spawn_audio_input(
     let sample_rate = config.sample_rate().0;
     let channels = config.channels();
 
-    let release_time = (sample_rate as f32 * release_time).round();
+    let release_time = (sample_rate as f32 * minimal_fragment_length).round();
 
     let mut sink = Sink::new(
         voice2txt_url,

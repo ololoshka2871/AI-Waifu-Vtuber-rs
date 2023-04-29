@@ -4,8 +4,6 @@ pub mod config;
 pub mod deeplx_translate_owned;
 pub mod dispatcher;
 pub mod dummy_ai;
-pub mod llama;
-pub mod llama_client;
 pub mod num2words;
 pub mod silerio_tts;
 pub mod whisper_voice_recognize;
@@ -18,21 +16,33 @@ static CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Dispatcher> {
     use dispatcher::AIDispatcher;
 
-    match &config.ai_engine {
-        config::AIEngine::ChatGPT {
+    let mut ai_config = ::chatgpt::prelude::ModelConfigurationBuilder::default();
+
+    // common config
+    let ai_conf = &config.ai_engine;
+    if let Some(temperature) = ai_conf.temperature {
+        ai_config.temperature(temperature);
+    }
+    if let Some(top_p) = ai_conf.top_p {
+        ai_config.top_p(top_p);
+    }
+    if let Some(presence_penalty) = ai_conf.presence_penalty {
+        ai_config.presence_penalty(presence_penalty);
+    }
+    if let Some(frequency_penalty) = ai_conf.frequency_penalty {
+        ai_config.frequency_penalty(frequency_penalty);
+    }
+    if let Some(reply_count) = ai_conf.reply_count {
+        ai_config.reply_count(reply_count);
+    }
+
+    match &ai_conf.engine_type {
+        config::AIEngineType::ChatGPT {
             openai_token,
             engine,
-            temperature,
-            top_p,
-            presence_penalty,
-            frequency_penalty,
-            reply_count,
-            api_url,
         } => {
-            let mut model_config = ::chatgpt::prelude::ModelConfigurationBuilder::default();
-            
             if let Some(engine) = engine {
-                model_config.engine(match engine.as_str() {
+                ai_config.engine(match engine.as_str() {
                     "Gpt35Turbo" => ::chatgpt::prelude::ChatGPTEngine::Gpt35Turbo,
                     "Gpt35Turbo_0301" => ::chatgpt::prelude::ChatGPTEngine::Gpt35Turbo_0301,
                     "Gpt4" => ::chatgpt::prelude::ChatGPTEngine::Gpt4,
@@ -42,67 +52,22 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
                     _ => panic!("Invalid engine: {engine}, supported values Gpt35Turbo, Gpt35Turbo_0301, Gpt4, Gpt4_32k, Gpt4_0314, Gpt4_32k_0314"),
                 });
             }
-            if let Some(temperature) = temperature {
-                model_config.temperature(*temperature);
-            }
-            if let Some(top_p) = top_p {
-                model_config.top_p(*top_p);
-            }
-            if let Some(presence_penalty) = presence_penalty {
-                model_config.presence_penalty(*presence_penalty);
-            }
-            if let Some(frequency_penalty) = frequency_penalty {
-                model_config.frequency_penalty(*frequency_penalty);
-            }
-            if let Some(reply_count) = reply_count {
-                model_config.reply_count(*reply_count);
-            }
-            if let Some(api_url) = api_url {
-                model_config.api_url(api_url.clone());
-            }
 
             Box::new(AIDispatcher::new(
                 utils::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::new(
                     openai_token.clone(),
-                    model_config.build().unwrap(),
+                    ai_config.build().unwrap(),
                     config,
                 ),
             ))
         }
-        config::AIEngine::LLaMa {
-            api_url,
-            temperature,
-            top_p,
-            presence_penalty,
-            frequency_penalty,
-            repeat_penalty,
-            reply_count,
-        } => {
-            let mut model_config = llama::model_config::ModelConfigurationBuilder::default();
-            model_config.api_url(api_url.clone());
-
-            if let Some(temperature) = temperature {
-                model_config.temperature(*temperature);
-            }
-            if let Some(top_p) = top_p {
-                model_config.top_p(*top_p);
-            }
-            if let Some(presence_penalty) = presence_penalty {
-                model_config.presence_penalty(*presence_penalty);
-            }
-            if let Some(frequency_penalty) = frequency_penalty {
-                model_config.frequency_penalty(*frequency_penalty);
-            }
-            if let Some(repeat_penalty) = repeat_penalty {
-                model_config.repeat_penalty(*repeat_penalty);
-            }
-            if let Some(reply_count) = reply_count {
-                model_config.reply_count(*reply_count);
-            }
+        config::AIEngineType::LLaMa { api_url } => {
+            ai_config.api_url(api_url.clone()); // set local url (llama server)
 
             Box::new(AIDispatcher::new(
-                utils::llama_en_deeplx_builder::LLaMaEnAIBuilder::new(
-                    model_config.build().unwrap(),
+                utils::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::new(
+                    "no-token".to_string(),
+                    ai_config.build().unwrap(),
                     config,
                 ),
             ))
