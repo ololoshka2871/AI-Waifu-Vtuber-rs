@@ -34,7 +34,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
     mut control_request_channel_rx: Receiver<DiscordRequest>,
     text_responce_channel_tx: Sender<DiscordResponse>,
     tts_character: Option<String>,
-    tts: SilerioTTS,
+    tts: Option<SilerioTTS>,
     busy_messages_generator: F,
 ) {
     // грязный хак
@@ -68,7 +68,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                 process_text_request(
                     request,
                     dispatcher.as_mut(),
-                    &tts,
+                    tts.as_ref(),
                     tts_character.as_ref(),
                     &mut giuld_ch_user_map,
                     &text_responce_channel_tx,
@@ -93,7 +93,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                 process_voice_request(
                     request,
                     dispatcher.as_mut(),
-                    &tts,
+                    tts.as_ref(),
                     tts_character.as_ref(),
                     &mut giuld_ch_user_map,
                     &text_responce_channel_tx,
@@ -175,7 +175,11 @@ async fn main() {
 
     let dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url);
+    let tts = if config.silerio_tts_config.enabled {
+        Some(SilerioTTS::new(config.silerio_tts_config.tts_service_url))
+    } else {
+        None
+    };
 
     let busy_messages = config.busy_messages;
 

@@ -26,6 +26,7 @@
         "Answer_lang": "en"
     },
     "Silerio_TTS_Config": {
+        "Enabled": true,
         "TTS_Service_Url": "http://localhost:8961/say",
         "Voice_language": "ru",
         "Voice_model": "ru_v3",

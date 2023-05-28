@@ -24,3 +24,4 @@
 [v] Добавить конфигурацию LLaMa кроме url
 [_] Сброс не работает если бот общается только голосом
 [v] Замена LLaMa подсистемы на ChatGPT CustomURL
+[_] Японский TSS Через https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer/blob/main/app.py

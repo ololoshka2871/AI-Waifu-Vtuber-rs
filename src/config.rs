@@ -13,6 +13,10 @@ fn auto() -> String {
     "auto".to_string()
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum AIEngineType {
@@ -76,6 +80,8 @@ pub struct DeepLxTranslateConfig {
 
 #[derive(Deserialize)]
 pub struct SilerioTTSConfig {
+    #[serde(rename = "Enabled", default = "default_true")]
+    pub enabled: bool, // Enable TTS
     #[serde(rename = "TTS_Service_Url", default = "default_silerio_bridge_url")]
     pub tts_service_url: Url, // TTS service URL
     #[serde(rename = "Voice_character")]
