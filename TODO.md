@@ -26,4 +26,4 @@
 [v] Замена LLaMa подсистемы на ChatGPT CustomURL
 [_] Японский TSS Через https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer/blob/main/app.py
     [ ] Когда появится Rust клиент для [Gradio](https://gradio.app/) переписать на него
-    [ ] Костыль: используя самописный скрипт сделать наподобие Silero TTS
+    [v] Костыль: используя самописный скрипт сделать наподобие Silero TTS

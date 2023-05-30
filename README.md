@@ -18,3 +18,6 @@ See `external_services` directory for details
 ### Run
 1. Start selected services (see `external_services` directory)
 2. Run `cargo run --release --bin ai-waifu-vtuber` or `cargo run --release --bin ai-waifu-interactive`
+
+## Clone
+Please run `git lfs install` before clone this repository. Submodule uses it!
