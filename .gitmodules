@@ -4,3 +4,6 @@
 [submodule "external_services/Voice-2-txt-faster-whisper"]
 	path = external_services/Voice-2-txt-faster-whisper
 	url = https://github.com/ololoshka2871/Voice-2-txt-faster-whisper.git
+[submodule "external_services/jp-voice/voice_synthesizer-dist"]
+	path = external_services/jp-voice/voice_synthesizer_dist/
+	url = https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer
