@@ -71,7 +71,7 @@ async def say_get(tts: tuple, speakers: dict, request: web.Request) -> web.Strea
 
     # get duration
     # 0.1 - 5.0
-    duration = max(0.1, min(5.0, params.get('duration', 1.0)))
+    duration = max(0.1, min(5.0, float(params.get('duration', 1.0))))
 
     logger.info(f'Generating audio ({speaker}) for text: "{text}"')
 
@@ -110,7 +110,7 @@ async def start_server() -> web.Application:
     config_path = str(SYNTHESIZER_PATH_ABS.joinpath(info['config_path']))
     model_path = str(SYNTHESIZER_PATH_ABS.joinpath(info['model_path']))
     description = info['description']
-    onnx_dir = str(SYNTHESIZER_PATH_ABS.joinpath(info["onnx_dir"]))
+    onnx_dir = str(SYNTHESIZER_PATH_ABS.joinpath(info["onnx_dir"])) + "/" # костыль
     hps = utils.get_hparams_from_file(config_path)
     model = ONNXVITS_infer.SynthesizerTrn(
         len(hps.symbols),
