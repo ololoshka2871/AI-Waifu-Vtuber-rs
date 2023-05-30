@@ -5,8 +5,11 @@ pub mod deeplx_translate_owned;
 pub mod dispatcher;
 pub mod dummy_ai;
 pub mod num2words;
-pub mod silerio_tts;
 pub mod whisper_voice_recognize;
+
+pub mod jp_tts;
+pub mod silerio_tts;
+pub mod tts_engine;
 
 pub mod utils;
 

@@ -12,7 +12,6 @@ use clap::Parser;
 
 use ai_waifu::{
     config::Config,
-    silerio_tts::SilerioTTS,
     utils::{audio_dev::get_audio_device_by_name, audio_input::spawn_audio_input},
 };
 
@@ -148,11 +147,7 @@ async fn main() {
 
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = if config.silerio_tts_config.enabled {
-        Some(SilerioTTS::new(config.silerio_tts_config.tts_service_url))
-    } else {
-        None
-    };
+    let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
 
     let mut audio_request_ctrl = if let Some(ain) = audio_in {
         let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
@@ -207,34 +202,32 @@ async fn main() {
         };
 
         // TTS
-        if let Some(tts) = &tts {
-            match tts.say(&res, args.voice_actor.clone()).await {
-                Ok(sound_data) => {
-                    if let Some(ao) = &audio_out {
-                        if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
-                            // _stream mast exists while stream_handle is used
-                            match Sink::try_new(&stream_handle) {
-                                Ok(sink) => match Decoder::new_wav(sound_data) {
-                                    Ok(decoder) => {
-                                        sink.append(decoder);
-                                        sink.sleep_until_end();
-                                    }
-                                    Err(e) => {
-                                        error!("Decode wav error: {:?}", e);
-                                    }
-                                },
-                                Err(e) => {
-                                    error!("Sink error: {:?}", e);
+        match tts.say(&res).await {
+            Ok(sound_data) => {
+                if let Some(ao) = &audio_out {
+                    if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
+                        // _stream mast exists while stream_handle is used
+                        match Sink::try_new(&stream_handle) {
+                            Ok(sink) => match Decoder::new_wav(sound_data) {
+                                Ok(decoder) => {
+                                    sink.append(decoder);
+                                    sink.sleep_until_end();
                                 }
+                                Err(e) => {
+                                    error!("Decode wav error: {:?}", e);
+                                }
+                            },
+                            Err(e) => {
+                                error!("Sink error: {:?}", e);
                             }
-                        } else {
-                            error!("Audio output error");
                         }
+                    } else {
+                        error!("Audio output error");
                     }
                 }
-                Err(err) => {
-                    error!("TTS error: {:?}", err);
-                }
+            }
+            Err(err) => {
+                error!("TTS error: {:?}", err);
             }
         }
 

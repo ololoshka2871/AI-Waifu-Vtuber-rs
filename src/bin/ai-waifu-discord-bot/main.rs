@@ -15,7 +15,7 @@ use songbird::{driver::DecodeMode, Config, SerenityInit};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
-use ai_waifu::{config::Config as BotConfig, dispatcher::Dispatcher, silerio_tts::SilerioTTS};
+use ai_waifu::{config::Config as BotConfig, dispatcher::Dispatcher, tts_engine::TTSEngine};
 use control::{DiscordRequest, DiscordResponse};
 use discord_event_handler::DiscordEventHandler;
 use tracing_subscriber::{
@@ -33,8 +33,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
     mut dispatcher: Box<dyn Dispatcher>,
     mut control_request_channel_rx: Receiver<DiscordRequest>,
     text_responce_channel_tx: Sender<DiscordResponse>,
-    tts_character: Option<String>,
-    tts: Option<SilerioTTS>,
+    tts: TTSEngine,
     busy_messages_generator: F,
 ) {
     // грязный хак
@@ -68,8 +67,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                 process_text_request(
                     request,
                     dispatcher.as_mut(),
-                    tts.as_ref(),
-                    tts_character.as_ref(),
+                    &tts,
                     &mut giuld_ch_user_map,
                     &text_responce_channel_tx,
                     busy_messages_generator(),
@@ -93,8 +91,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                 process_voice_request(
                     request,
                     dispatcher.as_mut(),
-                    tts.as_ref(),
-                    tts_character.as_ref(),
+                    &tts,
                     &mut giuld_ch_user_map,
                     &text_responce_channel_tx,
                     busy_messages_generator(),
@@ -175,11 +172,7 @@ async fn main() {
 
     let dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = if config.silerio_tts_config.enabled {
-        Some(SilerioTTS::new(config.silerio_tts_config.tts_service_url))
-    } else {
-        None
-    };
+    let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
 
     let busy_messages = config.busy_messages;
 
@@ -187,7 +180,6 @@ async fn main() {
         dispatcher,
         control_request_channel_rx,
         text_responce_channel_tx,
-        config.silerio_tts_config.voice_character,
         tts,
         move || {
             use rand::Rng;

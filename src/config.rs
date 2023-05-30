@@ -5,16 +5,16 @@ fn default_silerio_bridge_url() -> Url {
     Url::parse("http://localhost:8961/say").unwrap()
 }
 
+fn default_jp_tts_bridge_url() -> Url {
+    Url::parse("http://localhost:8231/say").unwrap()
+}
+
 fn default_openai_whisper_url() -> Url {
     Url::parse("http://localhost:3157/transcribe").unwrap()
 }
 
 fn auto() -> String {
     "auto".to_string()
-}
-
-fn default_true() -> bool {
-    true
 }
 
 #[derive(Deserialize)]
@@ -79,17 +79,23 @@ pub struct DeepLxTranslateConfig {
 }
 
 #[derive(Deserialize)]
-pub struct SilerioTTSConfig {
-    #[serde(rename = "Enabled", default = "default_true")]
-    pub enabled: bool, // Enable TTS
-    #[serde(rename = "TTS_Service_Url", default = "default_silerio_bridge_url")]
-    pub tts_service_url: Url, // TTS service URL
-    #[serde(rename = "Voice_character")]
-    pub voice_character: Option<String>, // Voice character name (like "ksenia")
-    #[serde(rename = "Voice_language")]
-    pub voice_language: String, // Voice language (like "ru")
-    #[serde(rename = "Voice_model")]
-    pub voice_model: String, // Voice model name (like "ru_v3")
+#[serde(tag = "type")]
+pub enum TTSConfig {
+    Disabled,
+    SilerioTTSConfig{
+        #[serde(rename = "TTS_Service_Url", default = "default_silerio_bridge_url")]
+        tts_service_url: Url, // TTS service URL
+        #[serde(rename = "Voice_character")]
+        voice_character: Option<String>, // Voice character name (like "ksenia")
+    },
+    JPVoicesTTSConfig{
+        #[serde(rename = "TTS_Service_Url", default = "default_jp_tts_bridge_url")]
+        tts_service_url: Url, // TTS service URL
+        #[serde(rename = "Voice_character")]
+        voice_character: Option<u32>, // Voice character id 0, 1... see external_services/jp-voice/voice_synthesizer_dist/app.py
+        #[serde(rename = "Voice_duration")]
+        voice_duration: Option<f32>, // Voice tempo
+    }
 }
 
 #[derive(Deserialize)]
@@ -114,8 +120,8 @@ pub struct Config {
     pub discord_config: DiscordConfig, // Discord bot config
     #[serde(rename = "DeepLx_Translate_Config")]
     pub deeplx_translate_config: DeepLxTranslateConfig, // DeepLx translate config
-    #[serde(rename = "Silerio_TTS_Config")]
-    pub silerio_tts_config: SilerioTTSConfig, // Silerio TTS config
+    #[serde(rename = "TTS_Config")]
+    pub tts_config: TTSConfig, // TTS config
     #[serde(rename = "Busy_messages")]
     pub busy_messages: Vec<String>, // Messages to send when the AI is busy
     #[serde(rename = "STT_Config")]

@@ -70,4 +70,4 @@ name = "ai-waifu-discord-bot"
 name = "ai-waifu-interactive"
 
 [[bin]]
-name = "tts-test"
+name = "tss-test"

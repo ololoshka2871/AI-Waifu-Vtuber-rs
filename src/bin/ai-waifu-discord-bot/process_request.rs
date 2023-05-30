@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use ai_waifu::{
     dispatcher::{AIError, Dispatcher},
-    silerio_tts::SilerioTTS,
+    tts_engine::TTSEngine,
 };
 
 use bytes::Bytes;
@@ -17,12 +17,8 @@ use crate::{
     voice_ch_map::{State, VoiceChannelMap},
 };
 
-async fn generate_tts<T: Into<String>>(
-    resp: T,
-    tts: &SilerioTTS,
-    tts_character: Option<&String>,
-) -> Option<Cursor<Bytes>> {
-    match tts.say(resp, tts_character.clone()).await {
+async fn generate_tts<T: Into<String>>(resp: T, tts: &TTSEngine) -> Option<Cursor<Bytes>> {
+    match tts.say(resp).await {
         Ok(tts) => Some(tts),
         Err(err) => {
             error!("TTS error: {:?}", err);
@@ -34,8 +30,7 @@ async fn generate_tts<T: Into<String>>(
 pub async fn process_text_request(
     request: DiscordAIRequest,
     dispatcher: &mut dyn Dispatcher,
-    tts: Option<&SilerioTTS>,
-    tts_character: Option<&String>,
+    tts: &TTSEngine,
     giuld_ch_user_map: &mut VoiceChannelMap,
     text_responce_channel_tx: &Sender<DiscordResponse>,
     busy_message: String,
@@ -46,11 +41,7 @@ pub async fn process_text_request(
     info!("{}", request);
     match dispatcher.try_process_request(Box::new(request)).await {
         Ok(resp) => {
-            let tts_data = if let Some(tts) = tts {
-                generate_tts(&resp, tts, tts_character).await
-            } else {
-                None
-            };
+            let tts_data = generate_tts(&resp, tts).await;
 
             let resp = if giuld_ch_user_map.get_voice_state(guild_id, channel_id) == State::Voice
                 && tts_data.is_some()
@@ -80,33 +71,23 @@ pub async fn process_text_request(
         }
         Err(AIError::Busy) => {
             let resp = if giuld_ch_user_map.get_voice_state(guild_id, channel_id) == State::Voice {
-                if let Some(tts) = tts {
-                    // Если бот в голосовом канале, то возмутиться вслух, а текст не отправлять
-                    match tts.say(&busy_message, tts_character.clone()).await {
-                        Ok(tts) => DiscordResponse::VoiceResponse {
-                            req_msg_id: Some(msg_id),
-                            guild_id: guild_id,
-                            channel_id: channel_id,
-                            text: None,
-                            tts,
-                        },
-                        Err(err) => {
-                            error!("TTS error: {:?}", err);
-                            DiscordResponse::TextResponse {
-                                req_msg_id: Some(msg_id),
-                                channel_id: channel_id,
-                                text: "TTS error!".to_string(),
-                                tts: None,
-                            }
-                        }
-                    }
-                } else {
-                    // tts ЗАПРЕЩЕН
-                    DiscordResponse::TextResponse {
+                // Если бот в голосовом канале, то возмутиться вслух, а текст не отправлять
+                match tts.say(&busy_message).await {
+                    Ok(tts) => DiscordResponse::VoiceResponse {
                         req_msg_id: Some(msg_id),
+                        guild_id: guild_id,
                         channel_id: channel_id,
-                        text: busy_message,
-                        tts: None,
+                        text: None,
+                        tts,
+                    },
+                    Err(err) => {
+                        error!("TTS error: {:?}", err);
+                        DiscordResponse::TextResponse {
+                            req_msg_id: Some(msg_id),
+                            channel_id: channel_id,
+                            text: "TTS error!".to_string(),
+                            tts: None,
+                        }
                     }
                 }
             } else {
@@ -132,8 +113,7 @@ pub async fn process_text_request(
 pub async fn process_voice_request(
     request: DiscordAIRequest,
     dispatcher: &mut dyn Dispatcher,
-    tts: Option<&SilerioTTS>,
-    tts_character: Option<&String>,
+    tts: &TTSEngine,
     giuld_ch_user_map: &mut VoiceChannelMap,
     text_responce_channel_tx: &Sender<DiscordResponse>,
     busy_message: String,
@@ -143,11 +123,7 @@ pub async fn process_voice_request(
     info!("{}", request);
     match dispatcher.try_process_request(Box::new(request)).await {
         Ok(resp) => {
-            let tts_data = if let Some(tts) = tts {
-                generate_tts(&resp, tts, tts_character).await
-            } else {
-                None
-            };
+            let tts_data = generate_tts(&resp, tts).await;
 
             if giuld_ch_user_map.get_voice_state(guild_id, channel_id) == State::Voice
                 && tts_data.is_some()
@@ -179,36 +155,34 @@ pub async fn process_voice_request(
         }
         Err(AIError::Busy) => {
             if giuld_ch_user_map.get_voice_state(guild_id, channel_id) == State::Voice {
-                if let Some(tts) = tts {
-                    // Если бот в голосовом канале, то возмутиться вслух
-                    match tts.say(&busy_message, tts_character.clone()).await {
-                        Ok(tts) => {
-                            let resp = DiscordResponse::VoiceResponse {
-                                req_msg_id: None,
-                                guild_id: guild_id,
-                                channel_id: channel_id,
-                                text: None,
-                                tts,
-                            };
-                            if let Err(err) = text_responce_channel_tx.send(resp).await {
-                                error!("Error send discord responce: {:?}", err);
-                            }
-                        }
-                        Err(err) => {
-                            error!("TTS error: {:?}", err);
+                // Если бот в голосовом канале, то возмутиться вслух
+                match tts.say(&busy_message).await {
+                    Ok(tts) => {
+                        let resp = DiscordResponse::VoiceResponse {
+                            req_msg_id: None,
+                            guild_id: guild_id,
+                            channel_id: channel_id,
+                            text: None,
+                            tts,
+                        };
+                        if let Err(err) = text_responce_channel_tx.send(resp).await {
+                            error!("Error send discord responce: {:?}", err);
                         }
                     }
-                } else {
-                    // бот не в голосовом канале, сообщение без вложения
-                    let resp = DiscordResponse::TextResponse {
-                        req_msg_id: None,
-                        channel_id: channel_id,
-                        text: busy_message,
-                        tts: None,
-                    };
-                    if let Err(err) = text_responce_channel_tx.send(resp).await {
-                        error!("Error send discord responce: {:?}", err);
+                    Err(err) => {
+                        error!("TTS error: {:?}", err);
                     }
+                }
+            } else {
+                // бот не в голосовом канале, сообщение без вложения
+                let resp = DiscordResponse::TextResponse {
+                    req_msg_id: None,
+                    channel_id: channel_id,
+                    text: busy_message,
+                    tts: None,
+                };
+                if let Err(err) = text_responce_channel_tx.send(resp).await {
+                    error!("Error send discord responce: {:?}", err);
                 }
             }
         }

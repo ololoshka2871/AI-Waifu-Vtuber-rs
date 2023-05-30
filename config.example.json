@@ -25,12 +25,17 @@
         "Speaker_lang": "auto",
         "Answer_lang": "en"
     },
-    "Silerio_TTS_Config": {
-        "Enabled": true,
+    "TTS_Config": {
+        "type": "Disabled"
+        //---or---
+        "type": "SilerioTTSConfig",
         "TTS_Service_Url": "http://localhost:8961/say",
-        "Voice_language": "ru",
-        "Voice_model": "ru_v3",
         //"Voice_character": "kseniya" // optional
+        //---or---
+        "type": "JPVoicesTTSConfig",
+        "tts_service_url": "http://localhost:8231/say",
+        //"Voice_character": 0, // optional
+        //"voice_duration": 1.0 // optional
     },
     "Busy_messages": [
         "I'm busy, please wait",
