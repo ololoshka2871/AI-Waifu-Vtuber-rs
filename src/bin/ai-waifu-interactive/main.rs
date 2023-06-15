@@ -237,15 +237,19 @@ async fn main() {
                 error!("TTS error: {:?}", err);
             }
         }
-        
+
         // write the line
         write!(
             stdout,
             "< {}\n",
             if config.display_raw_resp {
-                res.get(&AIResponseType::RawAnswer).unwrap()
+                format!(
+                    "{} [{}]",
+                    text_to_tts,
+                    res.get(&AIResponseType::RawAnswer).unwrap()
+                )
             } else {
-                text_to_tts
+                text_to_tts.clone()
             }
         )
         .unwrap();

@@ -1,4 +1,4 @@
-use std::{io::Cursor, collections::HashMap};
+use std::{collections::HashMap, io::Cursor};
 
 use ai_waifu::{
     dispatcher::{AIError, AIResponseType, Dispatcher},
@@ -17,7 +17,10 @@ use crate::{
     voice_ch_map::{State, VoiceChannelMap},
 };
 
-fn get_texts<'a>(resp: &'a HashMap<AIResponseType, String>, display_raw_resp: bool) -> (&'a String, &'a String) {
+fn get_texts<'a>(
+    resp: &'a HashMap<AIResponseType, String>,
+    display_raw_resp: bool,
+) -> (&'a String, String) {
     let text_to_tts = if let Some(translated_text) = resp.get(&AIResponseType::Translated) {
         translated_text
     } else {
@@ -25,9 +28,13 @@ fn get_texts<'a>(resp: &'a HashMap<AIResponseType, String>, display_raw_resp: bo
     };
 
     let text_to_send = if display_raw_resp {
-        resp.get(&AIResponseType::RawAnswer).unwrap()
+        format!(
+            "{} [{}]",
+            text_to_tts,
+            resp.get(&AIResponseType::RawAnswer).unwrap()
+        )
     } else {
-        text_to_tts
+        text_to_tts.clone()
     };
 
     (text_to_tts, text_to_send)

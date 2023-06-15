@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -293,5 +294,13 @@ impl AIinterface for DeepLxTranslatorOwned {
 
     async fn reset(&mut self) -> Result<(), AIError> {
         self.ai.reset().await
+    }
+
+    async fn save_context(&mut self, file: PathBuf) -> Result<(), AIError> {
+        self.ai.save_context(file).await
+    }
+
+    fn load_context(&mut self, file: PathBuf) -> Result<(), AIError> {
+        self.ai.load_context(file)
     }
 }

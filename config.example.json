@@ -10,7 +10,7 @@
             "type": "LLaMa",
             "Url": "http://localhost:8000/v1/chat/completions"
         },
-
+        "Context_path": "~\\pina_context"
         // see additional AI parameters in src/config.rs
     },
     "AI_initial_prompt": "you are an AI Waifu Virtual Youtuber called Pina. Your creator is Ardha, he made you using VoiceVox, OpenAI, Whisper AI, and DeepL. You reply with brief, to-the-point answers with no elaboration.",

@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use async_trait::async_trait;
 use maplit::hashmap;
 use serenity::futures::lock::Mutex;
+use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub enum AIError {
@@ -23,6 +24,9 @@ pub enum AIError {
 
     /// Ошибка сброса, нечего очищать
     ResetErrorEmpty,
+
+    /// Ошибка контекста
+    ContextError,
 }
 
 pub trait AIRequest: Send {
@@ -54,6 +58,12 @@ pub trait AIinterface: Sync + Send {
 
     /// Сбросить состояние ИИ
     async fn reset(&mut self) -> Result<(), AIError>;
+
+    /// Сохранить контекст
+    async fn save_context(&mut self, file: PathBuf) -> Result<(), AIError>;
+
+    /// Загрузить контекст
+    fn load_context(&mut self, file: PathBuf) -> Result<(), AIError>;
 }
 
 pub trait AIBuilder: Send + Sync {
@@ -75,20 +85,48 @@ pub trait Dispatcher: Send + Sync {
 pub struct AIDispatcher<AIB: AIBuilder> {
     ai_constructor: AIB,
     user_map: HashMap<String, Mutex<Box<dyn AIinterface>>>,
+    context_path: Option<PathBuf>,
 }
 
 impl<AIB: AIBuilder> AIDispatcher<AIB> {
-    pub fn new(ai_constructor: AIB) -> Self {
+    pub fn new(ai_constructor: AIB, context_path: Option<PathBuf>) -> Self {
         Self {
             ai_constructor,
             user_map: HashMap::new(),
+            context_path,
+        }
+    }
+
+    fn context_path(&self, channel: String) -> Option<PathBuf> {
+        if let Some(context_path) = &self.context_path {
+            Some(context_path.clone().join(channel))
+        } else {
+            None
         }
     }
 
     fn get_channel(&mut self, channel: String) -> &Mutex<Box<dyn AIinterface>> {
-        self.user_map
-            .entry(channel)
-            .or_insert_with(|| Mutex::new(self.ai_constructor.build()))
+        use std::collections::hash_map::Entry;
+
+        let context_filename = self.context_path(channel.clone());
+        let entry = self.user_map.entry(channel.clone());
+        match entry {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let mut ai_context = self.ai_constructor.build();
+
+                if let Some(filename) = context_filename {
+                    if filename.exists() {
+                        info!("Loading context from {:?}", filename);
+                        if let Err(_) = ai_context.load_context(filename) {
+                            error!("Failed to load context, skipping...");
+                        }
+                    }
+                }
+
+                entry.insert(Mutex::new(ai_context))
+            }
+        }
     }
 }
 
@@ -99,7 +137,9 @@ impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
         &mut self,
         request: Box<dyn AIRequest>,
     ) -> Result<HashMap<AIResponseType, String>, AIError> {
-        let channel = self.get_channel(request.channel());
+        let channel_name = request.channel();
+        let context_path = self.context_path(channel_name.clone());
+        let channel = self.get_channel(channel_name.clone());
 
         let mut channel_ai = channel.try_lock().ok_or(AIError::Busy)?;
 
@@ -109,7 +149,19 @@ impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
             };
             Ok(res)
         } else {
-            channel_ai.process(request).await
+            let result = channel_ai.process(request).await;
+
+            match result {
+                Ok(result) => {
+                    if let Some(filename) = context_path {
+                        if let Err(_) = channel_ai.save_context(filename).await {
+                            error!("Failed to save context, skipping...");
+                        }
+                    }
+                    Ok(result)
+                }
+                Err(e) => Err(e),
+            }
         }
     }
 

@@ -1,9 +1,14 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use async_trait::async_trait;
 
-use chatgpt::prelude::{ChatGPT as ChatGPTClient, Conversation, ModelConfiguration};
+use chatgpt::{
+    prelude::{ChatGPT as ChatGPTClient, Conversation, ModelConfiguration},
+    types::ChatMessage,
+};
 use maplit::hashmap;
+
+use tracing::error;
 
 use crate::dispatcher::{AIError, AIRequest, AIResponseType, AIinterface};
 
@@ -59,5 +64,25 @@ impl AIinterface for ChatGPT {
             self.conversation.history.push(first_message);
             Ok(())
         }
+    }
+
+    async fn save_context(&mut self, file: PathBuf) -> Result<(), AIError> {
+        self.conversation
+            .save_history_json(file)
+            .await
+            .map_err(|_| AIError::ContextError)
+    }
+
+    fn load_context(&mut self, file: PathBuf) -> Result<(), AIError> {
+        if !file.exists() {
+            error!("File \"{file:?}\" not exists");
+            return Err(AIError::ContextError);
+        }
+
+        self.conversation.history = serde_json::from_reader::<_, Vec<ChatMessage>>(
+            std::fs::File::open(file).map_err(|_| AIError::ContextError)?,
+        )
+        .map_err(|_| AIError::ContextError)?;
+        Ok(())
     }
 }

@@ -62,6 +62,7 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
                     ai_config.build().unwrap(),
                     config,
                 ),
+                config.ai_engine.context_path.clone(),
             ))
         }
         config::AIEngineType::LLaMa { api_url } => {
@@ -73,6 +74,7 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
                     ai_config.build().unwrap(),
                     config,
                 ),
+                config.ai_engine.context_path.clone(),
             ))
         }
     }
