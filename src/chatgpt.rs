@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 
 use chatgpt::prelude::{ChatGPT as ChatGPTClient, Conversation, ModelConfiguration};
+use maplit::hashmap;
 
-use crate::dispatcher::{AIError, AIRequest, AIinterface};
+use crate::dispatcher::{AIError, AIRequest, AIResponseType, AIinterface};
 
 pub struct ChatGPT {
     _client: ChatGPTClient,
@@ -25,7 +28,10 @@ impl ChatGPT {
 
 #[async_trait]
 impl AIinterface for ChatGPT {
-    async fn process(&mut self, _request: Box<dyn AIRequest>) -> Result<String, AIError> {
+    async fn process(
+        &mut self,
+        _request: Box<dyn AIRequest>,
+    ) -> Result<HashMap<AIResponseType, String>, AIError> {
         let request = _request.request();
 
         self.conversation
@@ -34,7 +40,12 @@ impl AIinterface for ChatGPT {
             .map_err(|e| AIError::AnswerError(format!("ChatGPT error: {:?}", e)))?;
 
         match self.conversation.history.last() {
-            Some(m) => Ok(m.content.clone()),
+            Some(m) => {
+                let res = hashmap! {
+                    AIResponseType::RawAnswer => m.content.clone(),
+                };
+                Ok(res)
+            }
             None => Err(AIError::UnknownError),
         }
     }

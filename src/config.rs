@@ -122,6 +122,8 @@ pub struct Config {
     pub deeplx_translate_config: DeepLxTranslateConfig, // DeepLx translate config
     #[serde(rename = "TTS_Config")]
     pub tts_config: TTSConfig, // TTS config
+    #[serde(rename = "DisplayRawResp")]
+    pub display_raw_resp: bool, // Display raw AI response
     #[serde(rename = "Busy_messages")]
     pub busy_messages: Vec<String>, // Messages to send when the AI is busy
     #[serde(rename = "STT_Config")]

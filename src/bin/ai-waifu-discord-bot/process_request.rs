@@ -1,7 +1,7 @@
-use std::io::Cursor;
+use std::{io::Cursor, collections::HashMap};
 
 use ai_waifu::{
-    dispatcher::{AIError, Dispatcher},
+    dispatcher::{AIError, AIResponseType, Dispatcher},
     tts_engine::TTSEngine,
 };
 
@@ -16,6 +16,22 @@ use crate::{
     discord_ai_request::DiscordAIRequest,
     voice_ch_map::{State, VoiceChannelMap},
 };
+
+fn get_texts<'a>(resp: &'a HashMap<AIResponseType, String>, display_raw_resp: bool) -> (&'a String, &'a String) {
+    let text_to_tts = if let Some(translated_text) = resp.get(&AIResponseType::Translated) {
+        translated_text
+    } else {
+        resp.get(&AIResponseType::RawAnswer).unwrap()
+    };
+
+    let text_to_send = if display_raw_resp {
+        resp.get(&AIResponseType::RawAnswer).unwrap()
+    } else {
+        text_to_tts
+    };
+
+    (text_to_tts, text_to_send)
+}
 
 async fn generate_tts<T: Into<String>>(resp: T, tts: &TTSEngine) -> Option<Cursor<Bytes>> {
     match tts.say(resp).await {
@@ -37,22 +53,24 @@ pub async fn process_text_request(
     guild_id: GuildId,
     channel_id: ChannelId,
     msg_id: MessageId,
+    display_raw_resp: bool,
 ) {
     info!("{}", request);
     match dispatcher.try_process_request(Box::new(request)).await {
         Ok(resp) => {
-            let tts_data = generate_tts(&resp, tts).await;
+            let (text_to_tts, text_to_send) = get_texts(&resp, display_raw_resp);
+
+            let tts_data = generate_tts(text_to_tts, tts).await;
 
             let resp = if giuld_ch_user_map.get_voice_state(guild_id, channel_id) == State::Voice
                 && tts_data.is_some()
             {
                 // Если бот в голосовом канале, то читать сообщени вслух, а отправлять текст без вложения
-
                 DiscordResponse::VoiceResponse {
                     req_msg_id: Some(msg_id),
                     guild_id: guild_id,
                     channel_id: channel_id,
-                    text: Some(resp.clone()),
+                    text: Some(text_to_send.clone()),
                     tts: tts_data.unwrap(),
                 }
             } else {
@@ -60,7 +78,7 @@ pub async fn process_text_request(
                 DiscordResponse::TextResponse {
                     req_msg_id: Some(msg_id),
                     channel_id: channel_id,
-                    text: resp.clone(),
+                    text: text_to_send.clone(),
                     tts: tts_data,
                 }
             };
@@ -119,22 +137,28 @@ pub async fn process_voice_request(
     busy_message: String,
     guild_id: GuildId,
     channel_id: ChannelId,
+    display_raw_resp: bool,
 ) {
     info!("{}", request);
     match dispatcher.try_process_request(Box::new(request)).await {
         Ok(resp) => {
-            let tts_data = generate_tts(&resp, tts).await;
+            let (text_to_tts, text_to_send) = get_texts(&resp, display_raw_resp);
+
+            let tts_data = generate_tts(text_to_tts, tts).await;
 
             if giuld_ch_user_map.get_voice_state(guild_id, channel_id) == State::Voice
                 && tts_data.is_some()
             {
                 // Если бот в голосовом канале, то читать сообщени вслух, а отправлять текст без вложения
-
                 let resp = DiscordResponse::VoiceResponse {
                     req_msg_id: None,
                     guild_id: guild_id,
                     channel_id: channel_id,
-                    text: None,
+                    text: if display_raw_resp {
+                        Some(text_to_send.clone())
+                    } else {
+                        None
+                    },
                     tts: tts_data.unwrap(),
                 };
                 if let Err(err) = text_responce_channel_tx.send(resp).await {
@@ -145,7 +169,7 @@ pub async fn process_voice_request(
                 let resp = DiscordResponse::TextResponse {
                     req_msg_id: None,
                     channel_id: channel_id,
-                    text: resp,
+                    text: text_to_send.clone(),
                     tts: None,
                 };
                 if let Err(err) = text_responce_channel_tx.send(resp).await {

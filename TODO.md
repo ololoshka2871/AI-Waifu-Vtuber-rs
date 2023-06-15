@@ -24,7 +24,11 @@
 * [v] Добавить конфигурацию LLaMa кроме url
 * [ ] Сброс не работает если бот общается только голосом
 * [v] Замена LLaMa подсистемы на ChatGPT CustomURL
-* [v] Японский TSS Через https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer/blob/main/app.py
+* [ ] Японский TSS Через https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer/blob/main/app.py
     * [ ] Когда появится Rust клиент для [Gradio](https://gradio.app/) переписать на него
     * [v] Костыль: используя самописный скрипт сделать наподобие Silero TTS
-* [ ] Двуязычность. Текстовые запросы на русском, TTS на японском.
+    * [v] Неправильная частота дискретизации, дискорд-бот читает слишком бысто. Нужно сделать ресемплинг в 48000 (src\bin\ai-waifu-discord-bot\discord_event_handler.rs:298)
+* [v] Двуязычность. Текстовые запросы на русском, TTS на японском.
+    * [v] `DisplayRawResp` если эта настройка не `None` то выводить текстовые напрямую от AI.
+    * [v] Дискорд бот будет писать тектовые ответы даже если запрос был голосовой
+    * [v] Интерактивный режим будет писать текстовые как получены от AI

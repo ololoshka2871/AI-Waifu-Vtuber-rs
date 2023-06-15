@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use maplit::hashmap;
 use serenity::futures::lock::Mutex;
 
 #[derive(Debug, Clone)]
@@ -33,13 +34,23 @@ pub trait AIRequest: Send {
     fn lang(&self) -> String;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AIResponseType {
+    RawAnswer,
+    NoDigits,
+    Translated,
+}
+
 /// Интерфейс ИИ:
 ///  - ChatGPT
 ///  - LLaMA
 #[async_trait]
 pub trait AIinterface: Sync + Send {
     /// Обработать запрос
-    async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError>;
+    async fn process(
+        &mut self,
+        request: Box<dyn AIRequest>,
+    ) -> Result<HashMap<AIResponseType, String>, AIError>;
 
     /// Сбросить состояние ИИ
     async fn reset(&mut self) -> Result<(), AIError>;
@@ -52,8 +63,10 @@ pub trait AIBuilder: Send + Sync {
 #[async_trait]
 pub trait Dispatcher: Send + Sync {
     /// Обработать запрос
-    async fn try_process_request(&mut self, request: Box<dyn AIRequest>)
-        -> Result<String, AIError>;
+    async fn try_process_request(
+        &mut self,
+        request: Box<dyn AIRequest>,
+    ) -> Result<HashMap<AIResponseType, String>, AIError>;
 
     /// Сбросить состояние ИИ
     async fn reset(&mut self, channel: String) -> Result<(), AIError>;
@@ -85,13 +98,16 @@ impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
     async fn try_process_request(
         &mut self,
         request: Box<dyn AIRequest>,
-    ) -> Result<String, AIError> {
+    ) -> Result<HashMap<AIResponseType, String>, AIError> {
         let channel = self.get_channel(request.channel());
 
         let mut channel_ai = channel.try_lock().ok_or(AIError::Busy)?;
 
         if request.request().is_empty() {
-            Ok("".to_string())
+            let res = hashmap! {
+                AIResponseType::RawAnswer => "".to_string(),
+            };
+            Ok(res)
         } else {
             channel_ai.process(request).await
         }

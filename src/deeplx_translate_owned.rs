@@ -1,14 +1,18 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use async_trait::async_trait;
 
+use maplit::hashmap;
 use reqwest::header;
 use serde_json::Value;
 use tracing::{debug, trace};
 
 use crate::{
     ai_translated_request::TranslatedAIRequest,
-    dispatcher::{AIError, AIRequest, AIinterface},
+    dispatcher::{AIError, AIRequest, AIResponseType, AIinterface},
 };
 
 static DEEPLX_URL: &str = "https://www2.deepl.com/jsonrpc";
@@ -237,7 +241,10 @@ impl DeepLxTranslatorOwned {
 
 #[async_trait]
 impl AIinterface for DeepLxTranslatorOwned {
-    async fn process(&mut self, request: Box<dyn AIRequest>) -> Result<String, AIError> {
+    async fn process(
+        &mut self,
+        request: Box<dyn AIRequest>,
+    ) -> Result<HashMap<AIResponseType, String>, AIError> {
         let r = request.request();
         let req_lang = if let Some(l) = &self.src_lang {
             l.clone()
@@ -253,24 +260,33 @@ impl AIinterface for DeepLxTranslatorOwned {
         debug!("{r} ({lang:?}) => {translated}", lang = &self.src_lang);
 
         // preocess AI request
-        let answer = self
+        let raw_answer = &self
             .ai
             .process(Box::new(TranslatedAIRequest::new(request, translated)))
-            .await?;
+            .await?[&AIResponseType::RawAnswer];
 
-        let answer = crate::num2words::convert_numbers2words(answer);
+        let no_digits_answer = crate::num2words::convert_numbers2words(raw_answer.clone());
 
         // translate answer to user language
-        let res = self
+        let translated_answer = self
             .translate(
-                answer.clone(),
+                no_digits_answer.clone(),
                 Some("en"),
                 self.dest_lang.clone(),
                 Some(1.0), // do not drop non-confident results
             )
             .await
             .map_err(|e| AIError::TranslateError(e))?;
-        debug!("{answer} => {res} ({lang})", lang = &self.dest_lang);
+        debug!(
+            "{raw_answer} => {translated_answer} ({lang})",
+            lang = &self.dest_lang
+        );
+
+        let res = hashmap! {
+            AIResponseType::RawAnswer => raw_answer.clone(),
+            AIResponseType::NoDigits => no_digits_answer,
+            AIResponseType::Translated => translated_answer,
+        };
 
         Ok(res)
     }

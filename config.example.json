@@ -37,6 +37,7 @@
         //"Voice_character": 0, // optional
         //"voice_duration": 1.0 // optional
     },
+    "DisplayRawResp": false,
     "Busy_messages": [
         "I'm busy, please wait",
         "Wait please, I'm thinking!"

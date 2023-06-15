@@ -12,6 +12,7 @@ use clap::Parser;
 
 use ai_waifu::{
     config::Config,
+    dispatcher::AIResponseType,
     utils::{audio_dev::get_audio_device_by_name, audio_input::spawn_audio_input},
 };
 
@@ -201,8 +202,14 @@ async fn main() {
             }
         };
 
+        let text_to_tts = if let Some(translated_text) = res.get(&AIResponseType::Translated) {
+            translated_text
+        } else {
+            res.get(&AIResponseType::RawAnswer).unwrap()
+        };
+
         // TTS
-        match tts.say(&res).await {
+        match tts.say(text_to_tts).await {
             Ok(sound_data) => {
                 if let Some(ao) = &audio_out {
                     if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
@@ -230,8 +237,17 @@ async fn main() {
                 error!("TTS error: {:?}", err);
             }
         }
-
+        
         // write the line
-        write!(stdout, "< {}\n", res).unwrap();
+        write!(
+            stdout,
+            "< {}\n",
+            if config.display_raw_resp {
+                res.get(&AIResponseType::RawAnswer).unwrap()
+            } else {
+                text_to_tts
+            }
+        )
+        .unwrap();
     }
 }

@@ -29,12 +29,15 @@ use crate::{
 
 use process_request::{process_text_request, process_voice_request};
 
+pub const DISCORD_AUDIO_SAMPLE_RATE: u32 = 48_000;
+
 async fn dispatcher_coroutine<F: Fn() -> String>(
     mut dispatcher: Box<dyn Dispatcher>,
     mut control_request_channel_rx: Receiver<DiscordRequest>,
     text_responce_channel_tx: Sender<DiscordResponse>,
     tts: TTSEngine,
     busy_messages_generator: F,
+    display_raw_resp: bool,
 ) {
     // грязный хак
     fn convert_user_to_pseudo_channel_id(user: &serenity::model::prelude::User) -> ChannelId {
@@ -74,6 +77,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                     guild_id,
                     channel_id,
                     msg_id,
+                    display_raw_resp,
                 )
                 .await;
             }
@@ -97,6 +101,7 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                     busy_messages_generator(),
                     guild_id,
                     channel_id,
+                    display_raw_resp,
                 )
                 .await;
             }
@@ -188,6 +193,7 @@ async fn main() {
             let idx = rng.gen_range(0..busy_messages.len());
             busy_messages[idx].clone()
         },
+        config.display_raw_resp,
     ));
 
     let framework = StandardFramework::new();
