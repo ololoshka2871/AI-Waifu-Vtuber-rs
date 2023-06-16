@@ -1,4 +1,7 @@
-use std::io::Write;
+use std::{
+    io::{Cursor, Write},
+    path::PathBuf,
+};
 
 mod interactive_request;
 
@@ -6,7 +9,10 @@ use interactive_request::InteractiveRequest;
 
 use rodio::{decoder::Decoder, OutputStream, Sink};
 
-use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::{
+    traits::{DeviceTrait, HostTrait},
+    Device,
+};
 
 use clap::Parser;
 
@@ -17,7 +23,7 @@ use ai_waifu::{
 };
 
 #[allow(unused_imports)]
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use ai_waifu::utils::audio_input::get_voice_request;
 use tracing_subscriber::{
@@ -45,6 +51,14 @@ struct Cli {
     /// Audio noise_gate, 0.0 - 1.0
     #[clap(short, long, default_value_t = 0.1)]
     noise_gate: f32,
+
+    /// Request subtitles file
+    #[clap(long)]
+    subtitles_req: Option<PathBuf>,
+
+    /// Response subtitles file
+    #[clap(long)]
+    subtitles_ans: Option<PathBuf>,
 }
 
 /// print all available devices
@@ -80,6 +94,35 @@ fn process_rusty_result(
         Err(ReadlineError::Interrupted) => Err("^C"),
         Err(ReadlineError::Closed) => Err("Closed"),
         Err(_) => Err("Unknown input error"),
+    }
+}
+
+fn say<R, F>(audio_out: &Option<Device>, sound_data: R, f: F)
+where
+    R: std::io::Read + std::io::Seek + Send + Sync + 'static,
+    F: FnOnce(),
+{
+    if let Some(ao) = audio_out {
+        if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
+            // _stream mast exists while stream_handle is used
+            match Sink::try_new(&stream_handle) {
+                Ok(sink) => match Decoder::new_wav(sound_data) {
+                    Ok(decoder) => {
+                        sink.append(decoder);
+                        sink.sleep_until_end();
+                        f();
+                    }
+                    Err(e) => {
+                        error!("Decode wav error: {:?}", e);
+                    }
+                },
+                Err(e) => {
+                    error!("Sink error: {:?}", e);
+                }
+            }
+        } else {
+            error!("Audio output error");
+        }
     }
 }
 
@@ -146,6 +189,8 @@ async fn main() {
         error!("No audio output device found, only text output will be available!");
     }
 
+    let mut last_tts_data: Option<Cursor<bytes::Bytes>> = None;
+
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
     let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
@@ -194,18 +239,35 @@ async fn main() {
             }
         };
 
+        if request.request == "/repeat" {
+            info!("Repeat...");
+            if let Some(lsd) = &last_tts_data {
+                say(&audio_out, lsd.clone(), || {});
+            } else {
+                warn!("Nothing to repeat!");
+            }
+            continue;
+        }
+
         if request.request == "/reset" {
             warn!("Resetting conversation state!");
             if let Err(e) = dispatcher.reset(request.channel()).await {
                 error!("Failed to reset conversation state: {:?}", e);
             }
-            write!(stdout, "\n").unwrap();
+            warn!("Forgetting everything...");
             continue;
         }
 
         if request.request == "/exit" {
             warn!("Exiting...");
             break;
+        }
+
+        if let Some(subtitles_req) = &args.subtitles_req {
+            debug!("Writing request subtitles...");
+            if let Err(e) = std::fs::write(subtitles_req, &request.request) {
+                error!("Failed to write request subtitles: {:?}", e);
+            }
         }
 
         let res = match dispatcher.try_process_request(Box::new(request)).await {
@@ -222,48 +284,54 @@ async fn main() {
             res.get(&AIResponseType::RawAnswer).unwrap()
         };
 
-        // TTS
-        match tts.say(text_to_tts).await {
-            Ok(sound_data) => {
-                if let Some(ao) = &audio_out {
-                    if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
-                        // _stream mast exists while stream_handle is used
-                        match Sink::try_new(&stream_handle) {
-                            Ok(sink) => match Decoder::new_wav(sound_data) {
-                                Ok(decoder) => {
-                                    sink.append(decoder);
-                                    sink.sleep_until_end();
-                                }
-                                Err(e) => {
-                                    error!("Decode wav error: {:?}", e);
-                                }
-                            },
-                            Err(e) => {
-                                error!("Sink error: {:?}", e);
-                            }
-                        }
-                    } else {
-                        error!("Audio output error");
-                    }
-                }
-            }
-            Err(err) => {
-                error!("TTS error: {:?}", err);
-            }
-        }
-
         // write the line
         if !text_to_tts.is_empty() {
-            if config.display_raw_resp {
-                write!(
-                    stdout,
-                    "< {} [{}]\n",
+            let sub_text = if config.display_raw_resp {
+                println!(
+                    "< {} [{}]",
+                    text_to_tts,
+                    res.get(&AIResponseType::RawAnswer).unwrap()
+                );
+                format!(
+                    "{}\n[{}]",
                     text_to_tts,
                     res.get(&AIResponseType::RawAnswer).unwrap()
                 )
-                .unwrap();
             } else {
-                write!(stdout, "< {}\n", text_to_tts).unwrap();
+                println!("< {}", text_to_tts);
+                text_to_tts.clone()
+            };
+
+            if let Some(subtitles_ans) = &args.subtitles_ans {
+                debug!("Writing answer subtitles...");
+                if let Err(e) = std::fs::write(subtitles_ans, &sub_text) {
+                    error!("Failed to write answer subtitles: {:?}", e);
+                }
+            }
+        }
+
+        // TTS
+        match tts.say(text_to_tts).await {
+            Ok(sound_data) => {
+                last_tts_data.replace(sound_data.clone());
+                say(&audio_out, sound_data, || {
+                    if let Some(subtitles_req) = &args.subtitles_req {
+                        trace!("Clearing request subtitles...");
+                        if let Err(e) = std::fs::write(subtitles_req, "") {
+                            error!("Failed to clear request subtitles: {:?}", e);
+                        }
+                    }
+
+                    if let Some(subtitles_ans) = &args.subtitles_ans {
+                        trace!("Clearing answer subtitles...");
+                        if let Err(e) = std::fs::write(subtitles_ans, "") {
+                            error!("Failed to clear answer subtitles: {:?}", e);
+                        }
+                    }
+                });
+            }
+            Err(err) => {
+                error!("TTS error: {:?}", err);
             }
         }
     }

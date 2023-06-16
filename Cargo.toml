@@ -1,6 +1,6 @@
 [package]
 name = "ai-waifu-bot"
-version = "0.3.0"
+version = "0.4.1"
 authors = ["Lolka_097"]
 edition = "2021"
 
