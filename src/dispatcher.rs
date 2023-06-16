@@ -1,5 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use std::collections::hash_map::Entry;
+
 use async_trait::async_trait;
 use maplit::hashmap;
 use serenity::futures::lock::Mutex;
@@ -106,8 +108,6 @@ impl<AIB: AIBuilder> AIDispatcher<AIB> {
     }
 
     fn get_channel(&mut self, channel: String) -> &Mutex<Box<dyn AIinterface>> {
-        use std::collections::hash_map::Entry;
-
         let context_filename = self.context_path(channel.clone());
         let entry = self.user_map.entry(channel.clone());
         match entry {
@@ -167,12 +167,24 @@ impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
 
     /// Сбросить состояние ИИ
     async fn reset(&mut self, channel: String) -> Result<(), AIError> {
+        let context_path = self.context_path(channel.clone());
         let ch = self.user_map.entry(channel);
-        if let std::collections::hash_map::Entry::Occupied(mut entry) = ch {
+        let reset_result = if let Entry::Occupied(mut entry) = ch {
             let mut channel_ai = entry.get_mut().try_lock().ok_or(AIError::Busy)?;
             channel_ai.reset().await
         } else {
-            Err(AIError::ResetErrorEmpty)
+            Ok(())
+        };
+
+        if let Some(filename) = context_path {
+            // delete context file
+            if filename.exists() {
+                if let Err(e) = std::fs::remove_file(filename) {
+                    error!("Failed to remove context file ({e}), skipping...");
+                }
+            }
         }
+
+        reset_result
     }
 }

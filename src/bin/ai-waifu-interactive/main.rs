@@ -12,12 +12,12 @@ use clap::Parser;
 
 use ai_waifu::{
     config::Config,
-    dispatcher::AIResponseType,
+    dispatcher::{AIRequest, AIResponseType},
     utils::{audio_dev::get_audio_device_by_name, audio_input::spawn_audio_input},
 };
 
 #[allow(unused_imports)]
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use ai_waifu::utils::audio_input::get_voice_request;
 use tracing_subscriber::{
@@ -194,6 +194,20 @@ async fn main() {
             }
         };
 
+        if request.request == "/reset" {
+            warn!("Resetting conversation state!");
+            if let Err(e) = dispatcher.reset(request.channel()).await {
+                error!("Failed to reset conversation state: {:?}", e);
+            }
+            write!(stdout, "\n").unwrap();
+            continue;
+        }
+
+        if request.request == "/exit" {
+            warn!("Exiting...");
+            break;
+        }
+
         let res = match dispatcher.try_process_request(Box::new(request)).await {
             Ok(res) => res,
             Err(e) => {
@@ -239,19 +253,18 @@ async fn main() {
         }
 
         // write the line
-        write!(
-            stdout,
-            "< {}\n",
+        if !text_to_tts.is_empty() {
             if config.display_raw_resp {
-                format!(
-                    "{} [{}]",
+                write!(
+                    stdout,
+                    "< {} [{}]\n",
                     text_to_tts,
                     res.get(&AIResponseType::RawAnswer).unwrap()
                 )
+                .unwrap();
             } else {
-                text_to_tts.clone()
+                write!(stdout, "< {}\n", text_to_tts).unwrap();
             }
-        )
-        .unwrap();
+        }
     }
 }
