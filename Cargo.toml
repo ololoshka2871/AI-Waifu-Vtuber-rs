@@ -19,6 +19,7 @@ chrono = "0.4"
 derive_builder="0.12"
 num2words = "0.4.1"
 lazy_static = "1.4"
+brotli = "3.3"
 
 # tracing
 tracing = "0.1"
@@ -40,6 +41,7 @@ serenity = { version = "0.11", features = [
 # async
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 async-trait = "0.1"
+proc-macro2 = "1.0.66" # https://github.com/rust-lang/rust/issues/113152#issuecomment-1612580132
 
 # chatGPT
 chatgpt_rs = { version = "1.1.1" }
@@ -58,7 +60,6 @@ dagc = "0.1"
 # interactive input
 rustyline-async = { version = "=0.3.0", default-features = false } # В версии 0.3.1 двоение букв
 futures-util="0.3"
-
 
 [lib]
 name = "ai_waifu"

@@ -1,4 +1,4 @@
-use ai_waifu::dispatcher::{AIRequest};
+use ai_waifu::dispatcher::AIRequest;
 
 pub struct InteractiveRequest {
     pub request: String,
