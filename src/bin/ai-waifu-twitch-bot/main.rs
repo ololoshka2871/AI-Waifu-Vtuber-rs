@@ -7,7 +7,7 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use clap::Parser;
 
 use ai_waifu::{
-    config::Config, silerio_tts::SilerioTTS, utils::audio_dev::get_audio_device_by_name,
+    config::Config, utils::audio_dev::get_audio_device_by_name,
 };
 
 use tracing::log::warn;
@@ -106,7 +106,7 @@ async fn main() {
 
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url, args.voice_actor);
+    let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
 
     let config = twitch_irc::ClientConfig::default();
     let (mut incoming_messages, client) = twitch_irc::TwitchIRCClient::<
@@ -142,7 +142,7 @@ async fn main() {
                     };
 
                     let res = match dispatcher.try_process_request(Box::new(request)).await {
-                        Ok(res) => res,
+                        Ok(res) => res[&ai_waifu::dispatcher::AIResponseType::Translated].clone(),
                         Err(e) => {
                             error!("Error: {:?}", e);
                             continue;

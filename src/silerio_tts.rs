@@ -2,7 +2,6 @@
 /// start server https://github.com/ololoshka2871/Selerio-TTS-server on any port and add it to config as "TTS_Service_Url"
 use std::io::Cursor;
 
-use reqwest::{IntoUrl, Url};
 use reqwest::IntoUrl;
 
 use bytes::Bytes;
