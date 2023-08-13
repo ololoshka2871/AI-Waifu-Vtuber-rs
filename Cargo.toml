@@ -61,6 +61,10 @@ dagc = "0.1"
 rustyline-async = { version = "=0.3.0", default-features = false } # В версии 0.3.1 двоение букв
 futures-util="0.3"
 
+# twitch irc
+twitch-irc = "5"
+
+
 [lib]
 name = "ai_waifu"
 
@@ -69,6 +73,9 @@ name = "ai-waifu-discord-bot"
 
 [[bin]]
 name = "ai-waifu-interactive"
+
+[[bin]]
+name = "ai-waifu-twitch-bot"
 
 [[bin]]
 name = "tts-test"
