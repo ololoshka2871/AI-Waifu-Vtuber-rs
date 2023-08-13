@@ -106,7 +106,7 @@ async fn main() {
 
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url);
+    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url, args.voice_actor);
 
     let config = twitch_irc::ClientConfig::default();
     let (mut incoming_messages, client) = twitch_irc::TwitchIRCClient::<
@@ -149,7 +149,7 @@ async fn main() {
                         }
                     };
 
-                    match tts.say(&res, args.voice_actor.clone()).await {
+                    match tts.say(&res).await {
                         Ok(sound_data) => {
                             if let Some(ao) = &audio_out {
                                 if let Ok((_stream, stream_handle)) =

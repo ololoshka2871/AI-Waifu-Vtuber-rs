@@ -78,4 +78,4 @@ name = "ai-waifu-interactive"
 name = "ai-waifu-twitch-bot"
 
 [[bin]]
-name = "tts-test"
+name = "stt-test"
