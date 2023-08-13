@@ -12,12 +12,12 @@ use clap::Parser;
 
 use ai_waifu::{
     config::Config,
-    silerio_tts::SilerioTTS,
+    dispatcher::{AIRequest, AIResponseType},
     utils::{audio_dev::get_audio_device_by_name, audio_input::spawn_audio_input},
 };
 
 #[allow(unused_imports)]
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use ai_waifu::utils::audio_input::get_voice_request;
 use tracing_subscriber::{
@@ -148,7 +148,7 @@ async fn main() {
 
     let mut dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url);
+    let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
 
     let mut audio_request_ctrl = if let Some(ain) = audio_in {
         let (audio_req_tx, audio_req_rx) = tokio::sync::mpsc::channel(1);
@@ -194,6 +194,20 @@ async fn main() {
             }
         };
 
+        if request.request == "/reset" {
+            warn!("Resetting conversation state!");
+            if let Err(e) = dispatcher.reset(request.channel()).await {
+                error!("Failed to reset conversation state: {:?}", e);
+            }
+            write!(stdout, "\n").unwrap();
+            continue;
+        }
+
+        if request.request == "/exit" {
+            warn!("Exiting...");
+            break;
+        }
+
         let res = match dispatcher.try_process_request(Box::new(request)).await {
             Ok(res) => res,
             Err(e) => {
@@ -202,8 +216,14 @@ async fn main() {
             }
         };
 
+        let text_to_tts = if let Some(translated_text) = res.get(&AIResponseType::Translated) {
+            translated_text
+        } else {
+            res.get(&AIResponseType::RawAnswer).unwrap()
+        };
+
         // TTS
-        match tts.say(&res, args.voice_actor.clone()).await {
+        match tts.say(text_to_tts).await {
             Ok(sound_data) => {
                 if let Some(ao) = &audio_out {
                     if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
@@ -233,6 +253,18 @@ async fn main() {
         }
 
         // write the line
-        write!(stdout, "< {}\n", res).unwrap();
+        if !text_to_tts.is_empty() {
+            if config.display_raw_resp {
+                write!(
+                    stdout,
+                    "< {} [{}]\n",
+                    text_to_tts,
+                    res.get(&AIResponseType::RawAnswer).unwrap()
+                )
+                .unwrap();
+            } else {
+                write!(stdout, "< {}\n", text_to_tts).unwrap();
+            }
+        }
     }
 }

@@ -5,8 +5,11 @@ pub mod deeplx_translate_owned;
 pub mod dispatcher;
 pub mod dummy_ai;
 pub mod num2words;
-pub mod silerio_tts;
 pub mod whisper_voice_recognize;
+
+pub mod jp_tts;
+pub mod silerio_tts;
+pub mod tts_engine;
 
 pub mod utils;
 
@@ -59,6 +62,7 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
                     ai_config.build().unwrap(),
                     config,
                 ),
+                config.ai_engine.context_path.clone(),
             ))
         }
         config::AIEngineType::LLaMa { api_url } => {
@@ -70,6 +74,7 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
                     ai_config.build().unwrap(),
                     config,
                 ),
+                config.ai_engine.context_path.clone(),
             ))
         }
     }

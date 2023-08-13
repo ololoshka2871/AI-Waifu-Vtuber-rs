@@ -283,13 +283,27 @@ impl EventHandler for DiscordEventHandler {
                                 }
                             };
                             let is_stereo = decoder.channels() > 1;
+                            let sample_rate = decoder.sample_rate();
 
-                            // convert audiodata to vec of u8
-                            let audiobytes = decoder
-                                .into_iter()
-                                .map(|x| x.to_le_bytes())
-                                .flatten()
-                                .collect::<Vec<_>>();
+                            let audiobytes = if sample_rate != crate::DISCORD_AUDIO_SAMPLE_RATE {
+                                let channels = decoder.channels();
+                                let resampled_source = rodio::source::UniformSourceIterator::new(
+                                    decoder.into_iter(),
+                                    channels,
+                                    crate::DISCORD_AUDIO_SAMPLE_RATE,
+                                );
+                                resampled_source
+                                    .map(|x: i16| x.to_le_bytes())
+                                    .flatten()
+                                    .collect::<Vec<_>>()
+                            } else {
+                                // convert audiodata to vec of u8
+                                decoder
+                                    .into_iter()
+                                    .map(|x| x.to_le_bytes())
+                                    .flatten()
+                                    .collect::<Vec<_>>()
+                            };
 
                             // play tts
                             {
@@ -340,7 +354,9 @@ impl EventHandler for DiscordEventHandler {
                             let ctx = ctx.clone();
                             tokio::spawn(async move {
                                 match ai_waifu::utils::audio_halpers::voice_data_to_wav_buf_gain(
-                                    voice_data, 2, 48000,
+                                    voice_data,
+                                    2,
+                                    crate::DISCORD_AUDIO_SAMPLE_RATE,
                                 ) {
                                     Ok(wav_data) => match voice2txt.recognize(wav_data).await {
                                         Ok((text, lang)) => {

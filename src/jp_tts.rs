@@ -2,23 +2,32 @@
 /// start server https://github.com/ololoshka2871/Selerio-TTS-server on any port and add it to config as "TTS_Service_Url"
 use std::io::Cursor;
 
-use reqwest::{IntoUrl, Url};
 use reqwest::IntoUrl;
 
 use bytes::Bytes;
 
-pub struct SilerioTTS {
+pub struct JpTTS {
     _client: reqwest::Client,
     builder: reqwest::RequestBuilder,
 }
 
-impl SilerioTTS {
-    pub fn new<URL: IntoUrl>(server_url: URL, voice_character: Option<String>) -> Self {
+impl JpTTS {
+    pub fn new<URL: IntoUrl>(
+        server_url: URL,
+        voice_character: Option<u32>,
+        voice_duration: Option<f32>,
+    ) -> Self {
         let client = reqwest::Client::new();
-        let builder = client.post(server_url.into_url().unwrap());
+        let builder = client.get(server_url.into_url().unwrap());
 
         let builder = if let Some(voice_character) = voice_character {
-            builder.query(&[("voice_id", voice_character)])
+            builder.query(&[("voice_id", voice_character.to_string())])
+        } else {
+            builder
+        };
+
+        let builder = if let Some(voice_duration) = voice_duration {
+            builder.query(&[("duration", voice_duration.to_string())])
         } else {
             builder
         };
@@ -36,7 +45,7 @@ impl SilerioTTS {
         let res = self.builder.try_clone().unwrap();
 
         let res = res
-            .body(text.into())
+            .query(&[("text", text.into())])
             .send()
             .await
             .map_err(|e| format!("Error: {}", e))?;

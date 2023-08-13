@@ -34,7 +34,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_translate_ru() {
-        let mut dispatcher = AIDispatcher::new(DummuENAIConstrictor {});
+        let mut dispatcher = AIDispatcher::new(DummuENAIConstrictor {}, None);
 
         let req = TestRequest {
             request: "Мама мыла раму.".to_string(),

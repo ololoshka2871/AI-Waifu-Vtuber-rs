@@ -15,7 +15,7 @@ use songbird::{driver::DecodeMode, Config, SerenityInit};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
-use ai_waifu::{config::Config as BotConfig, dispatcher::Dispatcher, silerio_tts::SilerioTTS};
+use ai_waifu::{config::Config as BotConfig, dispatcher::Dispatcher, tts_engine::TTSEngine};
 use control::{DiscordRequest, DiscordResponse};
 use discord_event_handler::DiscordEventHandler;
 use tracing_subscriber::{
@@ -29,13 +29,15 @@ use crate::{
 
 use process_request::{process_text_request, process_voice_request};
 
+pub const DISCORD_AUDIO_SAMPLE_RATE: u32 = 48_000;
+
 async fn dispatcher_coroutine<F: Fn() -> String>(
     mut dispatcher: Box<dyn Dispatcher>,
     mut control_request_channel_rx: Receiver<DiscordRequest>,
     text_responce_channel_tx: Sender<DiscordResponse>,
-    tts_character: Option<String>,
-    tts: SilerioTTS,
+    tts: TTSEngine,
     busy_messages_generator: F,
+    display_raw_resp: bool,
 ) {
     // грязный хак
     fn convert_user_to_pseudo_channel_id(user: &serenity::model::prelude::User) -> ChannelId {
@@ -69,13 +71,13 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                     request,
                     dispatcher.as_mut(),
                     &tts,
-                    tts_character.as_ref(),
                     &mut giuld_ch_user_map,
                     &text_responce_channel_tx,
                     busy_messages_generator(),
                     guild_id,
                     channel_id,
                     msg_id,
+                    display_raw_resp,
                 )
                 .await;
             }
@@ -94,12 +96,12 @@ async fn dispatcher_coroutine<F: Fn() -> String>(
                     request,
                     dispatcher.as_mut(),
                     &tts,
-                    tts_character.as_ref(),
                     &mut giuld_ch_user_map,
                     &text_responce_channel_tx,
                     busy_messages_generator(),
                     guild_id,
                     channel_id,
+                    display_raw_resp,
                 )
                 .await;
             }
@@ -175,7 +177,7 @@ async fn main() {
 
     let dispatcher = ai_waifu::create_ai_dispatcher(&config);
 
-    let tts = SilerioTTS::new(config.silerio_tts_config.tts_service_url);
+    let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
 
     let busy_messages = config.busy_messages;
 
@@ -183,7 +185,6 @@ async fn main() {
         dispatcher,
         control_request_channel_rx,
         text_responce_channel_tx,
-        config.silerio_tts_config.voice_character,
         tts,
         move || {
             use rand::Rng;
@@ -192,6 +193,7 @@ async fn main() {
             let idx = rng.gen_range(0..busy_messages.len());
             busy_messages[idx].clone()
         },
+        config.display_raw_resp,
     ));
 
     let framework = StandardFramework::new();
