@@ -254,7 +254,6 @@ async fn main() {
             if let Err(e) = dispatcher.reset(request.channel()).await {
                 error!("Failed to reset conversation state: {:?}", e);
             }
-            warn!("Forgetting everything...");
             continue;
         }
 
@@ -287,16 +286,9 @@ async fn main() {
         // write the line
         if !text_to_tts.is_empty() {
             let sub_text = if config.display_raw_resp {
-                println!(
-                    "< {} [{}]",
-                    text_to_tts,
-                    res.get(&AIResponseType::RawAnswer).unwrap()
-                );
-                format!(
-                    "{}\n[{}]",
-                    text_to_tts,
-                    res.get(&AIResponseType::RawAnswer).unwrap()
-                )
+                let raw_text = res.get(&AIResponseType::RawAnswer).unwrap();
+                println!("< {} [{}]", text_to_tts, raw_text);
+                raw_text.clone()
             } else {
                 println!("< {}", text_to_tts);
                 text_to_tts.clone()
@@ -322,6 +314,7 @@ async fn main() {
                         }
                     }
 
+                    std::thread::sleep(std::time::Duration::from_millis(750));
                     if let Some(subtitles_ans) = &args.subtitles_ans {
                         trace!("Clearing answer subtitles...");
                         if let Err(e) = std::fs::write(subtitles_ans, "") {
