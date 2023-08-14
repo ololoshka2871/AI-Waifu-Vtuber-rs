@@ -1,18 +1,20 @@
 mod twitch_request;
 
-use rodio::{decoder::Decoder, OutputStream, Sink};
+use std::{collections::HashMap, path::PathBuf};
 
 use cpal::traits::{DeviceTrait, HostTrait};
 
 use clap::Parser;
 
 use ai_waifu::{
-    config::Config, utils::audio_dev::get_audio_device_by_name,
+    config::Config,
+    dispatcher::AIResponseType,
+    utils::{audio_dev::get_audio_device_by_name, say::say},
 };
 
-use tracing::log::warn;
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
+use tracing::{log::warn, trace};
 
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
@@ -21,7 +23,6 @@ use twitch_irc::message::ServerMessage;
 
 /// Ai Waifu interactive mode
 #[derive(Parser)]
-#[allow(non_snake_case)]
 struct Cli {
     /// List audio devices
     #[clap(short, long, default_value_t = false)]
@@ -31,12 +32,20 @@ struct Cli {
     voice_actor: Option<String>,
 
     /// Audio output device name
-    #[clap(short, long)]
-    Out: Option<String>,
+    #[clap(short = 'O', long)]
+    out: Option<String>,
 
     /// twitch channel to join
     #[clap(short, long, required = true)]
     channel: Option<String>,
+
+    /// Request subtitles file
+    #[clap(long)]
+    subtitles_req: Option<PathBuf>,
+
+    /// Response subtitles file
+    #[clap(long)]
+    subtitles_ans: Option<PathBuf>,
 }
 
 /// print all available devices
@@ -85,7 +94,7 @@ async fn main() {
         return;
     }
 
-    let audio_out = if let Some(out_d) = args.Out {
+    let audio_out = if let Some(out_d) = args.out {
         if out_d == "none" {
             None
         } else {
@@ -108,11 +117,21 @@ async fn main() {
 
     let tts = ai_waifu::tts_engine::TTSEngine::with_config(&config.tts_config);
 
-    let config = twitch_irc::ClientConfig::default();
+    let twitch_config = twitch_irc::ClientConfig::default();
     let (mut incoming_messages, client) = twitch_irc::TwitchIRCClient::<
         twitch_irc::SecureTCPTransport,
         twitch_irc::login::StaticLoginCredentials,
-    >::new(config);
+    >::new(twitch_config);
+
+    let (message_channel_tx, mut message_channel_rx) =
+        tokio::sync::mpsc::channel::<twitch_request::TwitchRequest>(2);
+
+    let (tts_channel_tx, mut tts_channel_rx) =
+        tokio::sync::mpsc::channel::<HashMap<AIResponseType, String>>(2);
+
+    let channel = args.channel.unwrap();
+
+    //-------------------------------------------------------------------------------
 
     let join_handle = tokio::spawn(async move {
         while let Some(message) = incoming_messages.recv().await {
@@ -141,61 +160,108 @@ async fn main() {
                         username: m.sender.name,
                     };
 
-                    let res = match dispatcher.try_process_request(Box::new(request)).await {
-                        Ok(res) => res[&ai_waifu::dispatcher::AIResponseType::Translated].clone(),
-                        Err(e) => {
-                            error!("Error: {:?}", e);
-                            continue;
-                        }
-                    };
-
-                    match tts.say(&res).await {
-                        Ok(sound_data) => {
-                            if let Some(ao) = &audio_out {
-                                if let Ok((_stream, stream_handle)) =
-                                    OutputStream::try_from_device(ao)
-                                {
-                                    // _stream mast exists while stream_handle is used
-                                    match Sink::try_new(&stream_handle) {
-                                        Ok(sink) => match Decoder::new_wav(sound_data) {
-                                            Ok(decoder) => {
-                                                sink.append(decoder);
-                                                sink.sleep_until_end();
-                                            }
-                                            Err(e) => {
-                                                error!("Decode wav error: {:?}", e);
-                                            }
-                                        },
-                                        Err(e) => {
-                                            error!("Sink error: {:?}", e);
-                                        }
-                                    }
-                                } else {
-                                    error!("Audio output error");
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            error!("TTS error: {:?}", err);
-                        }
+                    if let Err(_e) = message_channel_tx.try_send(request) {
+                        error!("Procesing queue is full, skipping request");
                     }
-
-                    warn!("AI: {}\n", res);
                 }
                 m => debug!("Unhandled message: {:?}", m),
             }
         }
     });
 
-    client.join(args.channel.unwrap()).unwrap();
+    let subtitles_req = args.subtitles_req.clone();
+    let processing_handle = tokio::spawn(async move {
+        while let Some(request) = message_channel_rx.recv().await {
+            if let Some(subtitles_req) = &subtitles_req {
+                debug!("Writing request subtitles...");
+                if let Err(e) = std::fs::write(subtitles_req, &request.request) {
+                    error!("Failed to write request subtitles: {:?}", e);
+                }
+            }
+
+            match dispatcher.try_process_request(Box::new(request)).await {
+                Ok(res) => tts_channel_tx.send(res).await.unwrap(),
+                Err(e) => {
+                    error!("Error: {:?}", e);
+                    continue;
+                }
+            };
+        }
+    });
+
+    let subtitles_req = args.subtitles_req.clone();
+    let subtitles_ans = args.subtitles_ans.clone();
+    let tts_handle = tokio::spawn(async move {
+        while let Some(res) = tts_channel_rx.recv().await {
+            let text_to_tts = if let Some(translated_text) = res.get(&AIResponseType::Translated) {
+                translated_text
+            } else {
+                res.get(&AIResponseType::RawAnswer).unwrap()
+            };
+
+            // write the line
+            if !text_to_tts.is_empty() {
+                let sub_text = if config.display_raw_resp {
+                    let raw_text = res.get(&AIResponseType::RawAnswer).unwrap();
+                    println!("< {} [{}]", text_to_tts, raw_text);
+                    raw_text.clone()
+                } else {
+                    println!("< {}", text_to_tts);
+                    text_to_tts.clone()
+                };
+
+                if let Some(subtitles_ans) = &subtitles_ans {
+                    debug!("Writing answer subtitles...");
+                    if let Err(e) = std::fs::write(subtitles_ans, &sub_text) {
+                        error!("Failed to write answer subtitles: {:?}", e);
+                    }
+                }
+            }
+
+            // TTS
+            match tts.say(text_to_tts).await {
+                Ok(sound_data) => {
+                    say(&audio_out, sound_data, || {
+                        if let Some(subtitles_req) = &subtitles_req {
+                            trace!("Clearing request subtitles...");
+                            if let Err(e) = std::fs::write(subtitles_req, "") {
+                                error!("Failed to clear request subtitles: {:?}", e);
+                            }
+                        }
+
+                        std::thread::sleep(std::time::Duration::from_millis(750));
+                        if let Some(subtitles_ans) = &subtitles_ans {
+                            trace!("Clearing answer subtitles...");
+                            if let Err(e) = std::fs::write(subtitles_ans, "") {
+                                error!("Failed to clear answer subtitles: {:?}", e);
+                            }
+                        }
+                    });
+                }
+                Err(err) => {
+                    error!("TTS error: {:?}", err);
+                }
+            }
+        }
+    });
+
+    client.join(channel).unwrap();
 
     join_handle.await.unwrap();
+    processing_handle.await.unwrap();
+    tts_handle.await.unwrap();
 }
 
 //  return true if text contains repeated words
 fn contains_repititions(text: &str) -> bool {
-    let mut words = text.split_whitespace().collect::<Vec<&str>>();
+    let words_src = text.split_whitespace().collect::<Vec<&str>>();
+    let mut words = words_src.clone();
     words.sort();
     words.dedup();
-    words.len() != text.split_whitespace().count()
+    if words.len() != words_src.len() {
+        if words.len() > 1 && words_src.len() - words.len() > 2 {
+            return true;
+        }
+    }
+    false
 }

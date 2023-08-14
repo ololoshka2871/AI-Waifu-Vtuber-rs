@@ -7,32 +7,29 @@ mod interactive_request;
 
 use interactive_request::InteractiveRequest;
 
-use rodio::{decoder::Decoder, OutputStream, Sink};
-
-use cpal::{
-    traits::{DeviceTrait, HostTrait},
-    Device,
-};
+use cpal::traits::{DeviceTrait, HostTrait};
 
 use clap::Parser;
 
 use ai_waifu::{
     config::Config,
     dispatcher::{AIRequest, AIResponseType},
-    utils::{audio_dev::get_audio_device_by_name, audio_input::spawn_audio_input},
+    utils::{
+        audio_dev::get_audio_device_by_name,
+        audio_input::{get_voice_request, spawn_audio_input},
+        say::say,
+    },
 };
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
 
-use ai_waifu::utils::audio_input::get_voice_request;
 use tracing_subscriber::{
     prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
 
 /// Ai Waifu interactive mode
 #[derive(Parser)]
-#[allow(non_snake_case)]
 struct Cli {
     /// List audio devices
     #[clap(short, long, default_value_t = false)]
@@ -42,11 +39,11 @@ struct Cli {
     voice_actor: Option<String>,
 
     /// Audio input device name
-    #[clap(short, long)]
-    In: Option<String>,
+    #[clap(short = 'I', long)]
+    ain: Option<String>,
     /// Audio output device name
-    #[clap(short, long)]
-    Out: Option<String>,
+    #[clap(short = 'O', long)]
+    out: Option<String>,
 
     /// Audio noise_gate, 0.0 - 1.0
     #[clap(short, long, default_value_t = 0.1)]
@@ -97,35 +94,6 @@ fn process_rusty_result(
     }
 }
 
-fn say<R, F>(audio_out: &Option<Device>, sound_data: R, f: F)
-where
-    R: std::io::Read + std::io::Seek + Send + Sync + 'static,
-    F: FnOnce(),
-{
-    if let Some(ao) = audio_out {
-        if let Ok((_stream, stream_handle)) = OutputStream::try_from_device(ao) {
-            // _stream mast exists while stream_handle is used
-            match Sink::try_new(&stream_handle) {
-                Ok(sink) => match Decoder::new_wav(sound_data) {
-                    Ok(decoder) => {
-                        sink.append(decoder);
-                        sink.sleep_until_end();
-                        f();
-                    }
-                    Err(e) => {
-                        error!("Decode wav error: {:?}", e);
-                    }
-                },
-                Err(e) => {
-                    error!("Sink error: {:?}", e);
-                }
-            }
-        } else {
-            error!("Audio output error");
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() {
     use futures_util::future::FutureExt;
@@ -151,7 +119,7 @@ async fn main() {
         return;
     }
 
-    let audio_in = if let Some(in_d) = args.In {
+    let audio_in = if let Some(in_d) = args.ain {
         if in_d == "none" {
             None
         } else {
@@ -161,7 +129,7 @@ async fn main() {
         ht.default_input_device()
     };
 
-    let audio_out = if let Some(out_d) = args.Out {
+    let audio_out = if let Some(out_d) = args.out {
         if out_d == "none" {
             None
         } else {

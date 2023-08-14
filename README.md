@@ -17,7 +17,8 @@ See `external_services` directory for details
 
 ### Run
 1. Start selected services (see `external_services` directory)
-2. Run `cargo run --release --bin ai-waifu-vtuber` or `cargo run --release --bin ai-waifu-interactive`
+2. Run `cargo run --release --bin ai-waifu-vtuber`, `cargo run --release --bin ai-waifu-interactive` or `cargo run --release --bin ai-waifu-twitch-bot -c <channel>` 
+(see `config.json` for details)
 
 ## Clone
 Please run `git lfs install` before clone this repository. Submodule uses it!
