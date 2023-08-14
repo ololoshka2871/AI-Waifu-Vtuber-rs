@@ -1,7 +1,6 @@
 use std::{
-    collections::HashMap,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
+    io::Read,
+    time::{SystemTime, UNIX_EPOCH}, path::PathBuf, collections::HashMap,
 };
 
 use async_trait::async_trait;
@@ -90,10 +89,10 @@ impl DeepLxTranslatorOwned {
         Self::to_header(
             &mut headers,
             "User-Agent",
-            "DeepL-iOS/2.6.0 iOS 16.3.0 (iPhone13,2)",
+            "DeepL-iOS/2.9.1 iOS 16.3.0 (iPhone13,2)",
         );
-        Self::to_header(&mut headers, "x-app-build", "353933");
-        Self::to_header(&mut headers, "x-app-version", "2.6");
+        Self::to_header(&mut headers, "x-app-build", "510265");
+        Self::to_header(&mut headers, "x-app-version", "2.9.1");
         Self::to_header(&mut headers, "Connection", "keep-alive");
 
         Self {
@@ -148,7 +147,7 @@ impl DeepLxTranslatorOwned {
                         "target_lang": dest_lang.into(),
                     },
                     "commonJobParams": {
-                        "WasSpoken":    false,
+                        "WasSpoken": true,
                         "TranscribeAS": "",
                         // RegionalVariant: "en-US",
                     },
@@ -168,16 +167,47 @@ impl DeepLxTranslatorOwned {
         };
 
         let client = reqwest::Client::new();
-        let resp: Value = client
+        let resp = client
             .post(DEEPLX_URL)
             .headers(self.headers.clone())
             .body(post_str)
             .send()
             .await
-            .map_err(|e| e.to_string())?
-            .json()
-            .await
             .map_err(|e| e.to_string())?;
+
+        let compressed = match resp.headers().get("Content-Encoding") {
+            Some(v) => {
+                let value = v.to_str().unwrap();
+                if value.contains("br") {
+                    true
+                } else {
+                    return Err(format!("Unsupported Content-Encoding: {}", value));
+                }
+            }
+            None => false,
+        };
+
+        let body = resp.bytes().await.map_err(|e| e.to_string())?;
+
+        let resp = if compressed {
+            // uncompress brotli
+            let mut decoder = brotli::Decompressor::new(&body[..], 8192);
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+
+            let resp = String::from_utf8(decompressed)
+                .map_err(|_| "Failed to decode response as UTF-8 string")?;
+            trace!("br compressed response: {}", resp);
+            resp
+        } else {
+            // raw response
+            let resp = String::from_utf8(body.to_vec())
+                .map_err(|_| "Failed to decode response as UTF-8 string")?;
+            trace!("responce response: {}", resp);
+            resp
+        };
+
+        let resp = serde_json::from_str(resp.as_str()).map_err(|e| e.to_string())?;
 
         // Ok resp:
         //  Object {"id": Number(8373055001), "jsonrpc": String("2.0"), "result": Object {"detectedLanguages": Object {}, "lang": String("EN"), "lang_is_confident": Bool(false), "texts": Array [Object {"alternatives": Array [], "text": String("Hi")}]}}
