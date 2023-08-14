@@ -7,6 +7,3 @@
 [submodule "external_services/jp-voice/voice_synthesizer-dist"]
 	path = external_services/jp-voice/voice_synthesizer_dist/
 	url = https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer
-[submodule "external_services/jp-voice/voice_synthesizer_dist"]
-	path = external_services/jp-voice/voice_synthesizer_dist
-	url = https://huggingface.co/spaces/Plachta/VITS-Umamusume-voice-synthesizer
