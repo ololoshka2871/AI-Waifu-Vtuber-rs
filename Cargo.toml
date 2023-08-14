@@ -44,10 +44,7 @@ async-trait = "0.1"
 proc-macro2 = "1.0.66" # https://github.com/rust-lang/rust/issues/113152#issuecomment-1612580132
 
 # chatGPT
-chatgpt_rs = { version = "1.1.1" }
-
-# LLaMa
-llama-rs = { git = "https://github.com/rustformers/llama-rs.git" }
+chatgpt_rs = "1.1.13"
 
 # Audio
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
@@ -58,7 +55,7 @@ dasp = "0.11.0"
 dagc = "0.1"
 
 # interactive input
-rustyline-async = { version = "=0.3.0", default-features = false } # В версии 0.3.1 двоение букв
+rustyline-async = { version = "0.3.2", default-features = false }
 futures-util="0.3"
 
 # twitch irc
