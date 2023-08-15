@@ -1,5 +1,6 @@
 use ai_waifu::dispatcher::AIRequest;
 
+#[derive(Clone)]
 pub struct InteractiveRequest {
     pub request: String,
     pub lang: String,

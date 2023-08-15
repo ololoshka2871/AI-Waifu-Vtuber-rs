@@ -5,6 +5,7 @@ use std::{
 
 use async_trait::async_trait;
 
+use futures_util::Stream;
 use maplit::hashmap;
 use reqwest::header;
 use serde_json::Value;
@@ -12,7 +13,7 @@ use tracing::{debug, trace};
 
 use crate::{
     ai_translated_request::TranslatedAIRequest,
-    dispatcher::{AIError, AIRequest, AIResponseType, AIinterface},
+    dispatcher::{AIError, AIRequest, AIResponseType, AIinterface, ResponseChunk},
 };
 
 static DEEPLX_URL: &str = "https://www2.deepl.com/jsonrpc";
@@ -320,6 +321,10 @@ impl AIinterface for DeepLxTranslatorOwned {
         };
 
         Ok(res)
+    }
+
+    async fn process_stream(&mut self, _request: Box<dyn AIRequest>) -> Result<Box<dyn Stream<Item = ResponseChunk>>, AIError> {
+        self.ai.process_stream(_request).await // TDOO: translate stream
     }
 
     async fn reset(&mut self) -> Result<(), AIError> {

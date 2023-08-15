@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use std::collections::hash_map::Entry;
 
 use async_trait::async_trait;
+use futures_util::{Stream, StreamExt};
 use maplit::hashmap;
 use serenity::futures::lock::Mutex;
 use tracing::{error, info};
@@ -47,6 +48,12 @@ pub enum AIResponseType {
     Translated,
 }
 
+pub enum ResponseChunk {
+    Begin,
+    Chunk(HashMap<AIResponseType, String>),
+    End,
+}
+
 /// Интерфейс ИИ:
 ///  - ChatGPT
 ///  - LLaMA
@@ -57,6 +64,12 @@ pub trait AIinterface: Sync + Send {
         &mut self,
         request: Box<dyn AIRequest>,
     ) -> Result<HashMap<AIResponseType, String>, AIError>;
+
+    /// Обработать запрос и вернуть поток ответов
+    async fn process_stream(
+        &mut self,
+        request: Box<dyn AIRequest>,
+    ) -> Result<Box<dyn Stream<Item = ResponseChunk>>, AIError>;
 
     /// Сбросить состояние ИИ
     async fn reset(&mut self) -> Result<(), AIError>;
@@ -79,6 +92,12 @@ pub trait Dispatcher: Send + Sync {
         &mut self,
         request: Box<dyn AIRequest>,
     ) -> Result<HashMap<AIResponseType, String>, AIError>;
+
+    /// Обработать запрос в поточном режиме
+    async fn try_process_request_stream(
+        &mut self,
+        request: Box<dyn AIRequest>,
+    ) -> Result<Box<dyn Stream<Item = ResponseChunk>>, AIError>;
 
     /// Сбросить состояние ИИ
     async fn reset(&mut self, channel: String) -> Result<(), AIError>;
@@ -159,6 +178,54 @@ impl<AIB: AIBuilder> Dispatcher for AIDispatcher<AIB> {
                         }
                     }
                     Ok(result)
+                }
+                Err(e) => Err(e),
+            }
+        }
+    }
+
+    /// Обработать запрос в поточном режиме
+    async fn try_process_request_stream(
+        &mut self,
+        request: Box<dyn AIRequest>,
+    ) -> Result<Box<dyn Stream<Item = ResponseChunk>>, AIError> {
+        let channel_name = request.channel();
+        let _context_path = self.context_path(channel_name.clone());
+        let channel = self.get_channel(channel_name.clone());
+
+        let mut channel_ai = channel.try_lock().ok_or(AIError::Busy)?;
+
+        if request.request().is_empty() {
+            let _res = hashmap! {
+                AIResponseType::RawAnswer => "".to_string(),
+            };
+            Err(AIError::ResetErrorEmpty)
+        } else {
+            let result = channel_ai.process_stream(request).await;
+
+            match result {
+                Ok(result) => {
+                    /*
+                    let map = result.map(|sentence| {
+                        /*
+                        match sentence {
+                            ResponseChunk::Begin => {},
+                            ResponseChunk::Chunk(sentence) => {}
+                            ResponseChunk::End => {}
+                        }*/
+                        sentence
+                    });
+                    */
+                    Ok(result)
+                    //Ok(Box::new(map))
+                    /*
+                    if let Some(filename) = context_path {
+                        if let Err(_) = channel_ai.save_context(filename).await {
+                            error!("Failed to save context, skipping...");
+                        }
+                    }
+                    Ok(result)
+                    */
                 }
                 Err(e) => Err(e),
             }

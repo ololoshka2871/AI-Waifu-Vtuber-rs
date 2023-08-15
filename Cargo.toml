@@ -1,6 +1,6 @@
 [package]
 name = "ai-waifu-bot"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Lolka_097"]
 edition = "2021"
 
@@ -20,6 +20,7 @@ derive_builder="0.12"
 num2words = "0.4.1"
 lazy_static = "1.4"
 brotli = "3.3"
+eventsource-stream = "0.2"
 
 # tracing
 tracing = "0.1"
@@ -44,7 +45,7 @@ async-trait = "0.1"
 proc-macro2 = "1.0.66" # https://github.com/rust-lang/rust/issues/113152#issuecomment-1612580132
 
 # chatGPT
-chatgpt_rs = "1.1.13"
+chatgpt_rs = { version = "1.1.13", features = ["streams"] }
 
 # Audio
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
@@ -56,7 +57,7 @@ dagc = "0.1"
 
 # interactive input
 rustyline-async = { version = "0.3.2", default-features = false }
-futures-util="0.3"
+futures-util = "0.3"
 
 # twitch irc
 twitch-irc = "5"

@@ -1,9 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use async_trait::async_trait;
+use futures_util::Stream;
 use maplit::hashmap;
 
-use crate::dispatcher::{AIError, AIRequest, AIResponseType, AIinterface};
+use crate::dispatcher::{AIError, AIRequest, AIResponseType, AIinterface, ResponseChunk};
 
 pub struct DummyAI;
 
@@ -17,6 +18,13 @@ impl AIinterface for DummyAI {
             AIResponseType::RawAnswer => request.request(),
         };
         Ok(res)
+    }
+
+    async fn process_stream(
+        &mut self,
+        _request: Box<dyn AIRequest>,
+    ) -> Result<Box<dyn Stream<Item = ResponseChunk>>, AIError> {
+        Err(AIError::ResetErrorEmpty)
     }
 
     async fn reset(&mut self) -> Result<(), AIError> {

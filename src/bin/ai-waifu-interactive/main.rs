@@ -5,6 +5,7 @@ use std::{
 
 mod interactive_request;
 
+use futures_util::StreamExt;
 use interactive_request::InteractiveRequest;
 
 use cpal::traits::{DeviceTrait, HostTrait};

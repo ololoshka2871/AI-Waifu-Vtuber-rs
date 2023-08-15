@@ -2,15 +2,17 @@ use std::{collections::HashMap, path::PathBuf};
 
 use async_trait::async_trait;
 
+use futures_util::{Stream, StreamExt};
+
 use chatgpt::{
     prelude::{ChatGPT as ChatGPTClient, Conversation, ModelConfiguration},
     types::ChatMessage,
 };
 use maplit::hashmap;
 
-use tracing::error;
+use tracing::{error, trace};
 
-use crate::dispatcher::{AIError, AIRequest, AIResponseType, AIinterface};
+use crate::dispatcher::{AIError, AIRequest, AIResponseType, AIinterface, ResponseChunk};
 
 pub struct ChatGPT {
     _client: ChatGPTClient,
@@ -53,6 +55,57 @@ impl AIinterface for ChatGPT {
             }
             None => Err(AIError::UnknownError),
         }
+    }
+
+    async fn process_stream(
+        &mut self,
+        _request: Box<dyn AIRequest>,
+    ) -> Result<Box<dyn Stream<Item = ResponseChunk>>, AIError> {
+        type CgptRC = chatgpt::types::ResponseChunk;
+
+        let request = _request.request();
+
+        let mut stream = self
+            .conversation
+            .send_message_streaming(request)
+            .await
+            .map_err(|e| AIError::AnswerError(format!("ChatGPT error: {:?}", e)))?;
+
+        /*
+        while let Some(sentence) = stream.next().await {
+            
+        }
+        */
+
+        #[allow(unused_variables)]
+        let map = stream.map(move |chank| match chank {
+            CgptRC::Content {
+                delta,
+                response_index,
+            } => {
+                trace!("ChatGPT response: {}", delta);
+                ResponseChunk::Chunk(hashmap! {
+                    AIResponseType::RawAnswer => delta,
+                })
+            }
+            CgptRC::BeginResponse {
+                role,
+                response_index,
+            } => {
+                trace!("ChatGPT BeginResponse");
+                ResponseChunk::Begin
+            }
+            CgptRC::CloseResponse { response_index } => {
+                trace!("ChatGPT CloseResponse");
+                ResponseChunk::End
+            }
+            CgptRC::Done => {
+                trace!("ChatGPT Done");
+                ResponseChunk::End
+            }
+        });
+
+        Ok(Box::new(map))
     }
 
     async fn reset(&mut self) -> Result<(), AIError> {
