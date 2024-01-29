@@ -19,6 +19,10 @@ fn auto() -> String {
     "auto".to_string()
 }
 
+fn default_false() -> bool {
+    false
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum AIEngineType {
@@ -30,11 +34,19 @@ pub enum AIEngineType {
         /// The GPT version used Gpt35Turbo, Gpt35Turbo_0301, Gpt4, Gpt4_32k, Gpt4_0314, Gpt4_32k_0314,
         #[serde(rename = "GPT_Version")]
         engine: Option<String>,
+
+        /// disable en translate
+        #[serde(rename = "Raw", default = "default_false")]
+        raw: bool,
     },
     LLaMa {
         /// URL of the /v1/chat/completions endpoint. Can be used to set a proxy
         #[serde(rename = "Url")]
         api_url: Url,
+
+        /// disable en translate
+        #[serde(rename = "Raw", default = "default_false")]
+        raw: bool,
     },
 }
 

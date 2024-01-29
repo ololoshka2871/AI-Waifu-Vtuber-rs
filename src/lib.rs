@@ -43,6 +43,7 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
         config::AIEngineType::ChatGPT {
             openai_token,
             engine,
+            raw,
         } => {
             if let Some(engine) = engine {
                 ai_config.engine(match engine.as_str() {
@@ -56,26 +57,48 @@ pub fn create_ai_dispatcher(config: &config::Config) -> Box<dyn dispatcher::Disp
                 });
             }
 
-            Box::new(AIDispatcher::new(
-                utils::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::new(
-                    openai_token.clone(),
-                    ai_config.build().unwrap(),
-                    config,
-                ),
-                config.ai_engine.context_path.clone(),
-            ))
+            if *raw {
+                Box::new(AIDispatcher::new(
+                    utils::chatgpt_raw_builder::ChatGPTRawAIBuilder::new(
+                        openai_token.clone(),
+                        ai_config.build().unwrap(),
+                        config,
+                    ),
+                    config.ai_engine.context_path.clone(),
+                ))
+            } else {
+                Box::new(AIDispatcher::new(
+                    utils::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::new(
+                        openai_token.clone(),
+                        ai_config.build().unwrap(),
+                        config,
+                    ),
+                    config.ai_engine.context_path.clone(),
+                ))
+            }
         }
-        config::AIEngineType::LLaMa { api_url } => {
+        config::AIEngineType::LLaMa { api_url, raw } => {
             ai_config.api_url(api_url.clone()); // set local url (llama server)
 
-            Box::new(AIDispatcher::new(
-                utils::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::new(
-                    "no-token".to_string(),
-                    ai_config.build().unwrap(),
-                    config,
-                ),
-                config.ai_engine.context_path.clone(),
-            ))
+            if *raw {
+                Box::new(AIDispatcher::new(
+                    utils::chatgpt_raw_builder::ChatGPTRawAIBuilder::new(
+                        "no-token".to_string(),
+                        ai_config.build().unwrap(),
+                        config,
+                    ),
+                    config.ai_engine.context_path.clone(),
+                ))
+            } else {
+                Box::new(AIDispatcher::new(
+                    utils::chatgpt_en_deeplx_builder::ChatGPTEnAIBuilder::new(
+                        "no-token".to_string(),
+                        ai_config.build().unwrap(),
+                        config,
+                    ),
+                    config.ai_engine.context_path.clone(),
+                ))
+            }
         }
     }
 }

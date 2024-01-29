@@ -4,3 +4,6 @@ start*.sh
 # models
 models/*
 !models/.placeholder
+
+# python cache
+jp-voice/voice_synthesizer_dist/__pycache__/

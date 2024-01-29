@@ -4,11 +4,13 @@
             "type": "ChatGPT",
             "OpenAI_Token": "<place your OpenAI token there>"
             // "Engine_Type": "Gpt35Turbo", // optional
+            // "Raw": false, // optional
         },
         //---or---
         "Engine_Type": {
             "type": "LLaMa",
             "Url": "http://localhost:8000/v1/chat/completions"
+            // "Raw": false, // optional
         },
         "Context_path": "~\\pina_context"
         // see additional AI parameters in src/config.rs
