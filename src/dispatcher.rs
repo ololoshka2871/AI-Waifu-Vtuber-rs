@@ -68,8 +68,27 @@ pub trait AIinterface: Sync + Send {
     fn load_context(&mut self, file: PathBuf) -> Result<(), AIError>;
 }
 
+#[async_trait]
+pub trait AIinterfaceStreamed {
+    /// Обработать запрос
+    async fn process_streamed(&mut self, request: Box<dyn AIRequest>) -> Result<(), AIError>;
+
+    /// Сбросить состояние ИИ
+    async fn reset(&mut self) -> Result<(), AIError>;
+
+    /// Сохранить контекст
+    async fn save_context(&mut self, file: PathBuf) -> Result<(), AIError>;
+
+    /// Загрузить контекст
+    fn load_context(&mut self, file: PathBuf) -> Result<(), AIError>;
+}
+
 pub trait AIBuilder: Send + Sync {
     fn build(&mut self) -> Box<dyn AIinterface>;
+}
+
+pub trait AIBuilderStreamed: Send + Sync {
+    fn build_streamed(&mut self) -> Box<dyn AIinterfaceStreamed>;
 }
 
 #[async_trait]

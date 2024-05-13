@@ -35,6 +35,10 @@ pub enum AIEngineType {
         /// URL of the /v1/chat/completions endpoint. Can be used to set a proxy
         #[serde(rename = "Url")]
         api_url: Url,
+
+        /// Model name to use
+        #[serde(rename = "Model")]
+        model: Option<String>,
     },
 }
 
@@ -141,5 +145,42 @@ impl Config {
         let contents =
             std::fs::read_to_string("config.json").expect("Failed to read config.json file!");
         serde_json::from_str::<Config>(&contents).unwrap()
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            ai_engine: AIEngine {
+                engine_type: AIEngineType::LLaMa {
+                    api_url: Url::parse("http://localhost:8000/v1/chat/completions").unwrap(),
+                    model: None,
+                },
+                temperature: None,
+                top_p: None,
+                presence_penalty: None,
+                frequency_penalty: None,
+                reply_count: None,
+                context_path: None,
+            },
+            initial_prompt: "Act as japan pop-idol".to_string(),
+            discord_config: DiscordConfig {
+                discord_token: "".to_string(),
+                channel_whitelist: vec![],
+            },
+            deeplx_translate_config: DeepLxTranslateConfig {
+                src_lang: auto(),
+                dest_lang: "".to_string(),
+            },
+            tts_config: TTSConfig::Disabled,
+            display_raw_resp: false,
+            busy_messages: vec![],
+            stt_config: STTConfig {
+                voice2txt_url: default_openai_whisper_url(),
+                drop_nonconfident_translate_result: None,
+                minimal_audio_fragment_length: 0.0,
+                maximal_audio_fragment_length: 0.0,
+            },
+        }
     }
 }

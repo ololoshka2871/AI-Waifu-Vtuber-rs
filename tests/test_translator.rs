@@ -1,26 +1,8 @@
 mod tests {
     use ai_waifu::{
         deeplx_translate_owned::DeepLxTranslatorOwned, dispatcher::*, dummy_ai::DummyAI,
+        utils::test_request::TestRequest,
     };
-
-    struct TestRequest {
-        request: String,
-        channel: String,
-    }
-
-    impl AIRequest for TestRequest {
-        fn request(&self) -> String {
-            self.request.clone()
-        }
-
-        fn channel(&self) -> String {
-            self.channel.clone()
-        }
-
-        fn lang(&self) -> String {
-            "auto".to_string()
-        }
-    }
 
     struct DummuENAIConstrictor;
 

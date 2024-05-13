@@ -1,4 +1,4 @@
-use reqwest::{self, Body, IntoUrl, Url};
+use reqwest::{Body, IntoUrl, Url};
 use serde_json::Value;
 
 #[derive(Clone)]
